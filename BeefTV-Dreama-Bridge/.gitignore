@@ -1,0 +1,10 @@
+__pycache__/
+state/
+backups/
+evidence/
+.worktrees/
+.superpowers/
+config.binding.json
+execution-policy.json
+progress.md
+*.beeftv-plugin

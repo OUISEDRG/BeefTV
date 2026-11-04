@@ -1,0 +1,849 @@
+{
+  "apiVersion": "beeftv.plugin/v2",
+  "id": "dreama-modalities",
+  "name": "剧梦媒体任务",
+  "version": "1.2.0",
+  "author": "Local Dreama Bridge",
+  "description": "连接本机剧梦桥接服务，提供可恢复的视频、延长、图片和音频任务，支持人物图片音色绑定。只提交用户主动创建的任务。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "本机桥接密钥",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "dreama-videos-async",
+        "label": "剧梦视频任务",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "http://127.0.0.1:18765",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": {
+              "$ref": "request.extra.idempotencyKey"
+            }
+          },
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "duration": {
+              "$ref": "request.duration"
+            },
+            "resolution": {
+              "$ref": "request.resolution"
+            },
+            "aspect_ratio": {
+              "$ref": "request.aspectRatio"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.images"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "videos": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.videos"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "audios": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.audios"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "character_voices": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama-videos-async.character_voices"
+              }
+            },
+            "dreama": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$ref": "response.id"
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "errorCodePaths": [
+            "error.code"
+          ],
+          "videos": {
+            "$ref": "response.video_url"
+          },
+          "resultEphemeral": true
+        }
+      },
+      {
+        "id": "dreama-extension-async",
+        "label": "剧梦视频延长任务",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "http://127.0.0.1:18765/extension",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": {
+              "$ref": "request.extra.idempotencyKey"
+            }
+          },
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "duration": {
+              "$ref": "request.duration"
+            },
+            "resolution": {
+              "$ref": "request.resolution"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.images"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "videos": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.videos"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "audios": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.audios"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "character_voices": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama-extension-async.character_voices"
+              }
+            },
+            "dreama": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$ref": "response.id"
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "errorCodePaths": [
+            "error.code"
+          ],
+          "videos": {
+            "$ref": "response.video_url"
+          },
+          "resultEphemeral": true
+        }
+      },
+      {
+        "id": "dreama-images-async",
+        "label": "剧梦图片任务",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "http://127.0.0.1:18765/image",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/images",
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": {
+              "$ref": "request.extra.idempotencyKey"
+            }
+          },
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.images"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "resolution": {
+              "$ref": "request.quality"
+            },
+            "aspect_ratio": {
+              "$ref": "request.aspectRatio"
+            },
+            "n": {
+              "$coalesce": [
+                {
+                  "$ref": "request.imageCount"
+                },
+                1
+              ]
+            },
+            "dreama": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/images/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "images": {
+            "$ref": "response.images"
+          },
+          "resultEphemeral": true
+        }
+      },
+      {
+        "id": "dreama-text-async",
+        "label": "剧梦文本任务",
+        "capabilities": [
+          "text"
+        ],
+        "scopes": [
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "http://127.0.0.1:18765/text",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model"
+          },
+          {
+            "name": "messages",
+            "type": "message[]",
+            "required": true,
+            "mapping": "messages"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/texts",
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": {
+              "$ref": "request.extra.idempotencyKey"
+            }
+          },
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "messages": {
+              "$ref": "request.messages"
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/texts/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "text": {
+            "$ref": "response.text"
+          },
+          "reasoning": {
+            "$ref": "response.reasoning"
+          }
+        }
+      },
+      {
+        "id": "dreama-audio-async",
+        "label": "剧梦音频任务",
+        "capabilities": [
+          "audio"
+        ],
+        "scopes": [
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "http://127.0.0.1:18765/audio",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "input"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/audio/tasks",
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": {
+              "$ref": "request.extra.idempotencyKey"
+            }
+          },
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "input": {
+              "$ref": "request.prompt"
+            },
+            "character_voices": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama-audio-async.character_voices"
+              }
+            },
+            "audios": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.audios"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "voice": {
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$in": [
+                      {
+                        "$lower": {
+                          "$trim": {
+                            "$ref": "request.extra.audioVoice"
+                          }
+                        }
+                      },
+                      [
+                        "",
+                        "alloy"
+                      ]
+                    ]
+                  },
+                  "then": null,
+                  "else": {
+                    "$ref": "request.extra.audioVoice"
+                  }
+                }
+              }
+            },
+            "response_format": {
+              "$coalesce": [
+                {
+                  "$ref": "request.extra.audioFormat"
+                },
+                "mp3"
+              ]
+            },
+            "speed": {
+              "$coalesce": [
+                {
+                  "$toFloat": {
+                    "$ref": "request.extra.audioSpeed"
+                  }
+                },
+                1
+              ]
+            },
+            "instructions": {
+              "$omitEmpty": {
+                "$ref": "request.extra.audioInstructions"
+              }
+            },
+            "dreama": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama"
+              }
+            },
+            "pitch": {
+              "$coalesce": [
+                {
+                  "$toFloat": {
+                    "$ref": "request.extra.audioPitch"
+                  }
+                },
+                0
+              ]
+            },
+            "volume": {
+              "$coalesce": [
+                {
+                  "$toFloat": {
+                    "$ref": "request.extra.audioVolume"
+                  }
+                },
+                1
+              ]
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/audio/tasks/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "audios": {
+            "$coalesce": [
+              {
+                "$ref": "response.audios"
+              },
+              {
+                "$ref": "response.audio_url"
+              }
+            ]
+          },
+          "resultEphemeral": true
+        }
+      },
+      {
+        "id": "dreama-enhancement-async",
+        "label": "剧梦视频增强任务",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "user.custom-channel",
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "http://127.0.0.1:18765/enhancement",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": false,
+            "mapping": "prompt"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "headers": {
+            "Idempotency-Key": {
+              "$ref": "request.extra.idempotencyKey"
+            }
+          },
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "duration": {
+              "$ref": "request.duration"
+            },
+            "resolution": {
+              "$ref": "request.resolution"
+            },
+            "aspect_ratio": {
+              "$ref": "request.aspectRatio"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.images"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "videos": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.videos"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "audios": {
+              "$map": {
+                "from": {
+                  "$sortByOrder": {
+                    "$ref": "request.audios"
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "dreama": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.dreama"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$ref": "response.id"
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              }
+            ]
+          },
+          "errorCodePaths": [
+            "error.code"
+          ],
+          "videos": {
+            "$ref": "response.video_url"
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

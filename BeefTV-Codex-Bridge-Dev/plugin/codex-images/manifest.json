@@ -1,0 +1,68 @@
+{
+  "apiVersion": "beeftv.plugin/v2",
+  "id": "codex-images",
+  "name": "Codex 内置生图",
+  "version": "1.1.0",
+  "author": "Local Codex Bridge",
+  "description": "经本机桥接调用已登录 Codex 的内置生图。分辨率为生成目标，实际尺寸由模型决定。",
+  "documentation": "使用本机 Codex 登录账号及其生图权限、额度。一次生成一张，支持最多 4 张参考图（每张 8 MiB，总计 16 MiB），不支持遮罩。1K/2K/4K/8K按最长边1024/2048/4096/8192像素写入原生生成要求；当前内置工具不能强制指定像素，因此是目标而非输出保证，不自动放大图片。结果会报告实际尺寸。比例是提示词约束，不保证严格宽高比。透明背景通过原生标志传递。生成可能需要数分钟，任务以异步轮询方式返回。",
+  "permissions": ["generation.run", "media.read"],
+  "configuration": {
+    "fields": [{"name": "apiKey", "type": "secret", "label": "本机桥接令牌", "required": true}]
+  },
+  "contributes": {
+    "providers": [{
+      "id": "codex-image",
+      "label": "Codex 内置生图",
+      "capabilities": ["image"],
+      "scopes": ["admin.system-channel", "user.custom-channel", "canvas", "creation", "agent"],
+      "baseUrl": "http://127.0.0.1:18766",
+      "requiresPublicMediaUrls": false,
+      "mediaTransport": {"image": "inline"},
+      "auth": {"type": "bearer", "field": "apiKey"},
+      "parameters": [
+        {"name": "model", "type": "string", "required": true, "mapping": "model", "values": ["codex-image"], "description": "本机 Codex 内置生图入口。"},
+        {"name": "prompt", "type": "string", "required": true, "mapping": "prompt", "description": "生图或编辑要求，最多 30000 字符。"},
+        {"name": "images", "type": "media[]", "required": false, "mapping": "images", "description": "最多 4 张内联参考图，不支持遮罩。"},
+        {"name": "imageCount", "type": "integer", "required": false, "mapping": "imageCount", "values": ["1"], "description": "固定单张输出。"},
+        {"name": "aspectRatio", "type": "string", "required": false, "mapping": "aspectRatio", "values": ["auto", "9:16", "16:9", "1:1", "3:4", "4:3", "2:3", "3:2", "21:9"], "description": "构图比例要求；实际尺寸由模型决定。"},
+        {"name": "quality", "type": "string", "required": false, "mapping": "quality", "values": ["auto", "1k", "2k", "4k", "8k"], "description": "目标分辨率，按最长边请求；不能保证原生输出达到此尺寸，不自动放大。"}
+      ],
+      "validations": [
+        {"assert": {"$lte": [{"$ref": "request.imageCount"}, 1]}, "message": "Codex 内置生图每次只生成一张图片。"},
+        {"assert": {"$lte": [{"$len": {"$ref": "request.images"}}, 4]}, "message": "Codex 内置生图最多支持 4 张参考图。"},
+        {"assert": {"$eq": [{"$len": {"$filter": {"from": {"$ref": "request.images"}, "as": "media", "where": {"$eq": [{"$ref": "media.role"}, "mask"]}}}}, 0]}, "message": "Codex 内置生图不支持遮罩；请在提示词中说明编辑范围。"},
+        {"assert": {"$eq": [{"$len": {"$filter": {"from": {"$ref": "request.images"}, "as": "media", "where": {"$not": {"$ref": "media.dataUrl"}}}}}, 0]}, "message": "Codex 参考图必须由 BeefTV 转为内联图片后提交。"},
+        {"assert": {"$eq": [{"$len": {"$ref": "request.videos"}}, 0]}, "message": "Codex 内置生图不支持参考视频。"},
+        {"assert": {"$eq": [{"$len": {"$ref": "request.audios"}}, 0]}, "message": "Codex 内置生图不支持参考音频。"}
+      ],
+      "create": {
+        "method": "POST",
+        "path": "/v1/images/jobs",
+        "originPath": true,
+        "contentType": "application/json",
+        "headers": {"Idempotency-Key": {"$ref": "request.extra.idempotencyKey"}},
+        "body": {
+          "model": {"$ref": "request.model"},
+          "prompt": {"$ref": "request.prompt"},
+          "images": {"$map": {"from": {"$ref": "request.images"}, "as": "media", "in": {"$ref": "media.dataUrl"}}},
+          "aspectRatio": {"$coalesce": [{"$ref": "request.aspectRatio"}, "auto"]},
+          "resolution": {"$coalesce": [{"$ref": "request.quality"}, "auto"]},
+          "transparentBackground": {"$toBool": {"$ref": "request.output.options.transparent"}}
+        }
+      },
+      "poll": {"method": "GET", "path": "/v1/images/jobs/{{taskId}}", "originPath": true},
+      "cancel": {"method": "DELETE", "path": "/v1/images/jobs/{{taskId}}", "originPath": true},
+      "response": {
+        "taskId": {"$coalesce": [{"$ref": "response.id"}, {"$ref": "taskId"}]},
+        "status": {"$switch": {"cases": [
+          {"when": {"$eq": [{"$ref": "response.status"}, "queued"]}, "then": "pending"},
+          {"when": {"$eq": [{"$ref": "response.status"}, "running"]}, "then": "processing"}
+        ], "default": {"$coalesce": [{"$ref": "response.status"}, "pending"]}}},
+        "message": {"$coalesce": [{"$ref": "response.error.message"}, {"$ref": "response.message"}, {"$ref": "response.error"}]},
+        "images": {"$ref": "response.images"},
+        "errorPaths": ["error.code"]
+      }
+    }]
+  }
+}

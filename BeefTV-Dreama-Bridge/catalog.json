@@ -1,0 +1,248 @@
+{
+  "items": [
+    {
+      "alias": "720P",
+      "eid": "20e746af-d952-4731-9c54-817b3690ec52",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":30,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":10,\"videoSizeMin\":0,\"videoSizeMax\":200,\"videoDurationMin\":2,\"videoDurationMax\":30,\"totalVideoDurationMax\":30,\"audioMin\":0,\"audioMax\":10,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":30,\"totalAudioDurationMax\":30,\"allowAudioOnly\":true,\"text\":\"30图+10音+10视\",\"modelTextLimit\":15000,\"referenceVideoEditDurationMin\":4,\"referenceVideoEditDurationMax\":30}",
+      "name": "即梦 2.5",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0},{\"duration\":16,\"token\":0},{\"duration\":17,\"token\":0},{\"duration\":18,\"token\":0},{\"duration\":19,\"token\":0},{\"duration\":20,\"token\":0},{\"duration\":21,\"token\":0},{\"duration\":22,\"token\":0},{\"duration\":23,\"token\":0},{\"duration\":24,\"token\":0},{\"duration\":25,\"token\":0},{\"duration\":26,\"token\":0},{\"duration\":27,\"token\":0},{\"duration\":28,\"token\":0},{\"duration\":29,\"token\":0},{\"duration\":30,\"token\":0}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "20492049-caa9-46db-b1bb-89723b409504",
+      "endpointMode": 5,
+      "hasSmartDuration": 1,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":30,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":10,\"videoSizeMin\":0,\"videoSizeMax\":200,\"videoDurationMin\":2,\"videoDurationMax\":30,\"totalVideoDurationMax\":30,\"audioMin\":0,\"audioMax\":10,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":30,\"totalAudioDurationMax\":30,\"allowAudioOnly\":true,\"text\":\"30图+10音+10视\",\"modelTextLimit\":15000,\"referenceVideoEditDurationMin\":4,\"referenceVideoEditDurationMax\":30}",
+      "name": "九梦 2.5 Pro",
+      "produceVideoFormats": [
+        "mp4",
+        "mov"
+      ],
+      "videoTokens": "[{\"duration\":-1,\"token\":900},{\"duration\":4,\"token\":120},{\"duration\":5,\"token\":150},{\"duration\":6,\"token\":180},{\"duration\":7,\"token\":210},{\"duration\":8,\"token\":240},{\"duration\":9,\"token\":270},{\"duration\":10,\"token\":300},{\"duration\":11,\"token\":330},{\"duration\":12,\"token\":360},{\"duration\":13,\"token\":390},{\"duration\":14,\"token\":420},{\"duration\":15,\"token\":450},{\"duration\":16,\"token\":480},{\"duration\":17,\"token\":510},{\"duration\":18,\"token\":540},{\"duration\":19,\"token\":570},{\"duration\":20,\"token\":600},{\"duration\":21,\"token\":630},{\"duration\":22,\"token\":660},{\"duration\":23,\"token\":690},{\"duration\":24,\"token\":720},{\"duration\":25,\"token\":750},{\"duration\":26,\"token\":780},{\"duration\":27,\"token\":810},{\"duration\":28,\"token\":840},{\"duration\":29,\"token\":870},{\"duration\":30,\"token\":900}]"
+    },
+    {
+      "alias": "480P",
+      "eid": "50347e68-2b4c-49da-8c45-426432bba793",
+      "endpointMode": 5,
+      "hasSmartDuration": 1,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":30,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":10,\"videoSizeMin\":0,\"videoSizeMax\":200,\"videoDurationMin\":2,\"videoDurationMax\":30,\"totalVideoDurationMax\":30,\"audioMin\":0,\"audioMax\":10,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":30,\"totalAudioDurationMax\":30,\"allowAudioOnly\":true,\"text\":\"30图+10音+10视\",\"modelTextLimit\":15000,\"referenceVideoEditDurationMin\":4,\"referenceVideoEditDurationMax\":30}",
+      "name": "九梦 2.5 Pro",
+      "produceVideoFormats": [
+        "mp4",
+        "mov"
+      ],
+      "videoTokens": "[{\"duration\":-1,\"token\":420},{\"duration\":4,\"token\":56},{\"duration\":5,\"token\":70},{\"duration\":6,\"token\":84},{\"duration\":7,\"token\":98},{\"duration\":8,\"token\":112},{\"duration\":9,\"token\":126},{\"duration\":10,\"token\":140},{\"duration\":11,\"token\":154},{\"duration\":12,\"token\":168},{\"duration\":13,\"token\":182},{\"duration\":14,\"token\":196},{\"duration\":15,\"token\":210},{\"duration\":16,\"token\":224},{\"duration\":17,\"token\":238},{\"duration\":18,\"token\":252},{\"duration\":19,\"token\":266},{\"duration\":20,\"token\":280},{\"duration\":21,\"token\":294},{\"duration\":22,\"token\":308},{\"duration\":23,\"token\":322},{\"duration\":24,\"token\":336},{\"duration\":25,\"token\":350},{\"duration\":26,\"token\":364},{\"duration\":27,\"token\":378},{\"duration\":28,\"token\":392},{\"duration\":29,\"token\":406},{\"duration\":30,\"token\":420}]"
+    },
+    {
+      "alias": "1080P",
+      "eid": "c4718290-75ee-4338-aa2d-f06915bc8371",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":30,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":10,\"videoSizeMin\":0,\"videoSizeMax\":200,\"videoDurationMin\":2,\"videoDurationMax\":30,\"totalVideoDurationMax\":30,\"audioMin\":0,\"audioMax\":10,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":30,\"totalAudioDurationMax\":30,\"allowAudioOnly\":true,\"text\":\"30图+10音+10视\",\"modelTextLimit\":15000,\"referenceVideoEditDurationMin\":4,\"referenceVideoEditDurationMax\":30}",
+      "name": "即梦 2.5",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0},{\"duration\":16,\"token\":0},{\"duration\":17,\"token\":0},{\"duration\":18,\"token\":0},{\"duration\":19,\"token\":0},{\"duration\":20,\"token\":0},{\"duration\":21,\"token\":0},{\"duration\":22,\"token\":0},{\"duration\":23,\"token\":0},{\"duration\":24,\"token\":0},{\"duration\":25,\"token\":0},{\"duration\":26,\"token\":0},{\"duration\":27,\"token\":0},{\"duration\":28,\"token\":0},{\"duration\":29,\"token\":0},{\"duration\":30,\"token\":0}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "70683466-1bf6-4b9d-a7fb-cf50a61e89d6",
+      "endpointMode": 5,
+      "hasSmartDuration": 1,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":5,\"videoSizeMin\":0,\"videoSizeMax\":100,\"videoDurationMin\":1,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":5,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":1,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"\"}",
+      "name": "九万 3.0（高速版）",
+      "videoTokens": "[{\"duration\":-1,\"token\":390},{\"duration\":2,\"token\":26},{\"duration\":3,\"token\":39},{\"duration\":4,\"token\":52},{\"duration\":5,\"token\":65},{\"duration\":6,\"token\":78},{\"duration\":7,\"token\":91},{\"duration\":8,\"token\":104},{\"duration\":9,\"token\":117},{\"duration\":10,\"token\":130},{\"duration\":11,\"token\":143},{\"duration\":12,\"token\":156},{\"duration\":13,\"token\":169},{\"duration\":14,\"token\":182},{\"duration\":15,\"token\":195},{\"duration\":16,\"token\":208},{\"duration\":17,\"token\":221},{\"duration\":18,\"token\":234},{\"duration\":19,\"token\":247},{\"duration\":20,\"token\":260},{\"duration\":21,\"token\":273},{\"duration\":22,\"token\":286},{\"duration\":23,\"token\":299},{\"duration\":24,\"token\":312},{\"duration\":25,\"token\":325},{\"duration\":26,\"token\":338},{\"duration\":27,\"token\":351},{\"duration\":28,\"token\":364},{\"duration\":29,\"token\":377},{\"duration\":30,\"token\":390}]"
+    },
+    {
+      "alias": "480P",
+      "eid": "bcb6dfc9-a787-476d-a7e2-a0bb7ff3b434",
+      "endpointMode": 5,
+      "hasSmartDuration": 1,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":5,\"videoSizeMin\":0,\"videoSizeMax\":100,\"videoDurationMin\":1,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":5,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":1,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"\"}",
+      "name": "九万 3.0（高速版）",
+      "videoTokens": "[{\"duration\":-1,\"token\":210},{\"duration\":2,\"token\":14},{\"duration\":3,\"token\":21},{\"duration\":4,\"token\":28},{\"duration\":5,\"token\":35},{\"duration\":6,\"token\":42},{\"duration\":7,\"token\":49},{\"duration\":8,\"token\":56},{\"duration\":9,\"token\":63},{\"duration\":10,\"token\":70},{\"duration\":11,\"token\":77},{\"duration\":12,\"token\":84},{\"duration\":13,\"token\":91},{\"duration\":14,\"token\":98},{\"duration\":15,\"token\":105},{\"duration\":16,\"token\":112},{\"duration\":17,\"token\":119},{\"duration\":18,\"token\":126},{\"duration\":19,\"token\":133},{\"duration\":20,\"token\":140},{\"duration\":21,\"token\":147},{\"duration\":22,\"token\":154},{\"duration\":23,\"token\":161},{\"duration\":24,\"token\":168},{\"duration\":25,\"token\":175},{\"duration\":26,\"token\":182},{\"duration\":27,\"token\":189},{\"duration\":28,\"token\":196},{\"duration\":29,\"token\":203},{\"duration\":30,\"token\":210}]\r\n"
+    },
+    {
+      "alias": "480P",
+      "eid": "91176ff4-33ea-4206-ada5-58e6ebbc6025",
+      "endpointMode": 5,
+      "hasSmartDuration": 1,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":5,\"videoSizeMin\":0,\"videoSizeMax\":100,\"videoDurationMin\":1,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":5,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":1,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"\"}",
+      "name": "九万 3.0",
+      "videoTokens": "[{\"duration\":-1,\"token\":120},{\"duration\":2,\"token\":8},{\"duration\":3,\"token\":12},{\"duration\":4,\"token\":16},{\"duration\":5,\"token\":20},{\"duration\":6,\"token\":24},{\"duration\":7,\"token\":28},{\"duration\":8,\"token\":32},{\"duration\":9,\"token\":36},{\"duration\":10,\"token\":40},{\"duration\":11,\"token\":44},{\"duration\":12,\"token\":48},{\"duration\":13,\"token\":52},{\"duration\":14,\"token\":56},{\"duration\":15,\"token\":60},{\"duration\":16,\"token\":64},{\"duration\":17,\"token\":68},{\"duration\":18,\"token\":72},{\"duration\":19,\"token\":76},{\"duration\":20,\"token\":80},{\"duration\":21,\"token\":84},{\"duration\":22,\"token\":88},{\"duration\":23,\"token\":92},{\"duration\":24,\"token\":96},{\"duration\":25,\"token\":100},{\"duration\":26,\"token\":104},{\"duration\":27,\"token\":108},{\"duration\":28,\"token\":112},{\"duration\":29,\"token\":116},{\"duration\":30,\"token\":120}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "79ac04ec-5232-4249-9f01-a942ac4cd1fc",
+      "endpointMode": 5,
+      "hasSmartDuration": 1,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":5,\"videoSizeMin\":0,\"videoSizeMax\":100,\"videoDurationMin\":1,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":5,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":1,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"\"}",
+      "name": "九万 3.0",
+      "videoTokens": "[{\"duration\":-1,\"token\":240},{\"duration\":2,\"token\":16},{\"duration\":3,\"token\":24},{\"duration\":4,\"token\":32},{\"duration\":5,\"token\":40},{\"duration\":6,\"token\":48},{\"duration\":7,\"token\":56},{\"duration\":8,\"token\":64},{\"duration\":9,\"token\":72},{\"duration\":10,\"token\":80},{\"duration\":11,\"token\":88},{\"duration\":12,\"token\":96},{\"duration\":13,\"token\":104},{\"duration\":14,\"token\":112},{\"duration\":15,\"token\":120},{\"duration\":16,\"token\":128},{\"duration\":17,\"token\":136},{\"duration\":18,\"token\":144},{\"duration\":19,\"token\":152},{\"duration\":20,\"token\":160},{\"duration\":21,\"token\":168},{\"duration\":22,\"token\":176},{\"duration\":23,\"token\":184},{\"duration\":24,\"token\":192},{\"duration\":25,\"token\":200},{\"duration\":26,\"token\":208},{\"duration\":27,\"token\":216},{\"duration\":28,\"token\":224},{\"duration\":29,\"token\":232},{\"duration\":30,\"token\":240}]"
+    },
+    {
+      "eid": "fda23d85-8c1f-4205-93e0-a47dbab89c69",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":12,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视（但是最大支持数量不得大于12个）\"}",
+      "name": "即梦 2.0",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "0682692b-0682-4433-9b96-a7cd2ea5dd71",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九梦 2.0 Mini",
+      "videoTokens": "[{\"duration\":4,\"token\":16},{\"duration\":5,\"token\":20},{\"duration\":6,\"token\":24},{\"duration\":7,\"token\":28},{\"duration\":8,\"token\":32},{\"duration\":9,\"token\":36},{\"duration\":10,\"token\":40},{\"duration\":11,\"token\":44},{\"duration\":12,\"token\":48},{\"duration\":13,\"token\":52},{\"duration\":14,\"token\":56},{\"duration\":15,\"token\":60}]"
+    },
+    {
+      "alias": "480P",
+      "eid": "ef6dd6a2-d0cf-4a55-bf06-af8beed51cb5",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九梦 2.0 Mini",
+      "videoTokens": "[{\"duration\":4,\"token\":8},{\"duration\":5,\"token\":10},{\"duration\":6,\"token\":12},{\"duration\":7,\"token\":14},{\"duration\":8,\"token\":16},{\"duration\":9,\"token\":18},{\"duration\":10,\"token\":20},{\"duration\":11,\"token\":22},{\"duration\":12,\"token\":24},{\"duration\":13,\"token\":26},{\"duration\":14,\"token\":28},{\"duration\":15,\"token\":30}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "204350fe-23c6-4424-8c61-8d77c337345e",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九梦 2.0 Fast",
+      "videoTokens": "[{\"duration\":4,\"token\":48},{\"duration\":5,\"token\":60},{\"duration\":6,\"token\":72},{\"duration\":7,\"token\":84},{\"duration\":8,\"token\":96},{\"duration\":9,\"token\":108},{\"duration\":10,\"token\":120},{\"duration\":11,\"token\":132},{\"duration\":12,\"token\":144},{\"duration\":13,\"token\":156},{\"duration\":14,\"token\":168},{\"duration\":15,\"token\":180}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "7573d384-0128-4424-9e90-8a0291b9274b",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九梦 2.0 Pro",
+      "videoTokens": "[{\"duration\":4,\"token\":80},{\"duration\":5,\"token\":100},{\"duration\":6,\"token\":120},{\"duration\":7,\"token\":140},{\"duration\":8,\"token\":160},{\"duration\":9,\"token\":180},{\"duration\":10,\"token\":200},{\"duration\":11,\"token\":220},{\"duration\":12,\"token\":240},{\"duration\":13,\"token\":260},{\"duration\":14,\"token\":280},{\"duration\":15,\"token\":300}]"
+    },
+    {
+      "alias": "即梦 2.0",
+      "eid": "9c2f8aea-b578-42f3-8565-36e2c2d20620",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":12,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视（但是最大支持数量不得大于12个）\"}",
+      "name": "即梦 2.0（日本）",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0}]"
+    },
+    {
+      "eid": "b37a9ed0-e819-4471-a2db-1d849f5f3786",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":12,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视（但是最大支持数量不得大于12个）\"}",
+      "name": "即梦 2.0",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0}]"
+    },
+    {
+      "eid": "305d1705-aa58-4ab2-aa56-5aa033a84a60",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":1,\"totalMax\":7,\"totalSizeMin\":0,\"totalSizeMax\":350,\"imageMin\":1,\"imageMax\":7,\"imageSizeMin\":0,\"imageSizeMax\":50,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"图生视频：仅1张图；首尾帧视频：固定2张（首帧+尾帧）；参考生视频：1~7张（viduq2-pro有视频输入时1~4张）\"}",
+      "name": "九度 3.0",
+      "videoTokens": "[{\"duration\":1,\"token\":7},{\"duration\":2,\"token\":14},{\"duration\":3,\"token\":21},{\"duration\":4,\"token\":28},{\"duration\":5,\"token\":35},{\"duration\":6,\"token\":42},{\"duration\":7,\"token\":49},{\"duration\":8,\"token\":56},{\"duration\":9,\"token\":63},{\"duration\":10,\"token\":70},{\"duration\":11,\"token\":77},{\"duration\":12,\"token\":84},{\"duration\":13,\"token\":91},{\"duration\":14,\"token\":98},{\"duration\":15,\"token\":105},{\"duration\":16,\"token\":112}]"
+    },
+    {
+      "alias": "480P",
+      "eid": "e38e3d2a-a32c-4a3e-9f9c-406b7d1e47fd",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九梦 2.0 Pro",
+      "videoTokens": "[{\"duration\":4,\"token\":40},{\"duration\":5,\"token\":50},{\"duration\":6,\"token\":60},{\"duration\":7,\"token\":70},{\"duration\":8,\"token\":80},{\"duration\":9,\"token\":90},{\"duration\":10,\"token\":100},{\"duration\":11,\"token\":110},{\"duration\":12,\"token\":120},{\"duration\":13,\"token\":130},{\"duration\":14,\"token\":140},{\"duration\":15,\"token\":150}]"
+    },
+    {
+      "eid": "e3bfc047-72e2-4884-90ec-d1970fc52355",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音\"}",
+      "name": "九马 1.1 Pro",
+      "videoTokens": "[{\"duration\":3,\"token\":36},{\"duration\":4,\"token\":48},{\"duration\":5,\"token\":60},{\"duration\":6,\"token\":72},{\"duration\":7,\"token\":84},{\"duration\":8,\"token\":96},{\"duration\":9,\"token\":108},{\"duration\":10,\"token\":120},{\"duration\":11,\"token\":132},{\"duration\":12,\"token\":144},{\"duration\":13,\"token\":156},{\"duration\":14,\"token\":168},{\"duration\":15,\"token\":180}]"
+    },
+    {
+      "alias": "480P",
+      "eid": "edf08924-e258-4b86-b60c-08a6a65aa555",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九梦 2.0 Fast",
+      "videoTokens": "[{\"duration\":4,\"token\":24},{\"duration\":5,\"token\":30},{\"duration\":6,\"token\":36},{\"duration\":7,\"token\":42},{\"duration\":8,\"token\":48},{\"duration\":9,\"token\":54},{\"duration\":10,\"token\":60},{\"duration\":11,\"token\":66},{\"duration\":12,\"token\":72},{\"duration\":13,\"token\":78},{\"duration\":14,\"token\":84},{\"duration\":15,\"token\":90}]"
+    },
+    {
+      "eid": "185faff2-7d91-492d-bd85-35ff03b9d308",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "LibTV 2.0",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0}]"
+    },
+    {
+      "alias": "720P",
+      "eid": "e9827145-1cf6-4108-a739-2dc794106ef5",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 1,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":50,\"videoDurationMin\":2,\"videoDurationMax\":15,\"totalVideoDurationMax\":15,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":15,\"audioDurationMin\":2,\"audioDurationMax\":15,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "九麦 3.0",
+      "videoTokens": "[{\"duration\":4,\"token\":32},{\"duration\":5,\"token\":40},{\"duration\":6,\"token\":48},{\"duration\":7,\"token\":56},{\"duration\":8,\"token\":64},{\"duration\":9,\"token\":72},{\"duration\":10,\"token\":80},{\"duration\":11,\"token\":88},{\"duration\":12,\"token\":96},{\"duration\":13,\"token\":104},{\"duration\":14,\"token\":112},{\"duration\":15,\"token\":120}]"
+    },
+    {
+      "eid": "2251174d-42fb-4c37-a25a-e804e5276a6d",
+      "endpointMode": 5,
+      "hasSmartDuration": 0,
+      "imageMax": 8,
+      "imageMin": 1,
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9999,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":3,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":3,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":15,\"allowAudioOnly\":false,\"text\":\"9图+3音+3视\"}",
+      "name": "LibTV 2.0",
+      "videoTokens": "[{\"duration\":4,\"token\":0},{\"duration\":5,\"token\":0},{\"duration\":6,\"token\":0},{\"duration\":7,\"token\":0},{\"duration\":8,\"token\":0},{\"duration\":9,\"token\":0},{\"duration\":10,\"token\":0},{\"duration\":11,\"token\":0},{\"duration\":12,\"token\":0},{\"duration\":13,\"token\":0},{\"duration\":14,\"token\":0},{\"duration\":15,\"token\":0}]"
+    }
+  ]
+}

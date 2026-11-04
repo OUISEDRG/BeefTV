@@ -1,0 +1,32 @@
+# Picture voice binding: observed upstream contracts
+
+Implemented in the isolated voice stage. No role creation, uploads, inference or paid submission was used to validate this change. The only live API checks were project/library/catalog reads, CLI prompt assembly and CDN `avinfo`.
+
+## Directory and binding
+
+- The official production `create-CvFMVb6n.js` exports `POST /storyboard/voiceTone/list`, `POST /storyboard/voiceTone/listMine`, and `POST /storyboard/voiceTone/detailAll` (`{ids:[id]}` for personal IDs). Public reads use `{page,size,isHumanlike:true}` and `{page,size,provider:"douge"}`. Personal reads use `{page,size,provider:"custom"}`. The official selector uses page 1 / size 100; the bridge follows pagination if necessary.
+- Current authenticated read returned 83 public and 53 personal voices. Personal voice 575709 is `一胎多宝_理查德`, with a 4-second, 352844-byte WAV reference confirmed by CDN `avinfo`. These counts are observations, not fixed constraints.
+- `VoiceSelectorModal-B339lT2t.js` (downloaded from the official production CDN) calls `onChange(voice.id, "")` for a saved personal/public voice, and `onChange(0, uploadVoiceUrl)` for a legacy uploaded sample.
+- `index-Bsshbw-t.js` around character offset 899219 calls `updateProjectLibrary` with `{id,name,projectId,voiceId,uploadVoiceUrl}`. `materialService-3c9uHPpQ.js` also passes `voiceId` and `uploadVoiceUrl` to `createProjectLibraryWithImages`. The ID being updated is the parent role asset. The reference ID consumed by prompts is its child image ID.
+- The bridge creates a role (`type:1`) for a bound picture only when the user submits a generation task, then reads the role and its child back and checks the exact voice ID or uploaded sample URL. An ordinary unbound picture retains the existing prop-reference path (`type:3`). Changing/removing a canvas binding never mutates an old remote task or role.
+- There was no observed separate unbind endpoint. The UI removes only its local picture metadata, so no guessed remote unbind is used. New user-created tasks capture the binding current at submission.
+- Catalog caches exist only in memory and are keyed by a hash of the current CLI login token. Login changes invalidate all private rows. Failed refreshes fail closed. No personal voices are persisted to the shared static public catalog. No credentials are returned to BeefTV.
+
+## Actual video consumption and prompt preservation
+
+- `referenceAssetLimit-UQTlfRuY.js` defines Image=1, Video=2, ImageWithVoice=3. `index-Bsshbw-t.js` `kV`, `oP`, `Vq`, `oH` and `aH` construct separate image and role-voice references. A role voice uses `{fileType:3,materialId:<child-image-id>,materialType:1}`; preview/reference resolution prefers the clip voice URL when supplied.
+- A read-only CLI check against existing project 503777 confirmed role image 218059 / voice 575709. `prompt assemble --prompt "参考理查德_族长礼服.png音色" --ref ...` returned an empty inline mention span whose URL-encoded extra props are exactly `{fileType:3,materialId:218059,materialType:1}`. Its image mention is `{fileType:1,materialId:218059,materialType:1}`.
+- The bridge extracts only these officially assembled machine-readable tags, places the image and voice tags together at the original `@图片N` position, and retains the original text, spacing, line breaks and reference ordering. It does not forward assembler-added sentences, instructions, speaker labels or rewritten dialogue.
+- `index-Bsshbw-t.js` around 1415100 first saves `videoPrompt` (and extension mode/target), then calls `produceVideo`. For extension it also passes the target first followed by deduplicated reference URLs. The bridge persists matching schemaVersion=1 extension workspace image/voice assets and verifies them before submit. It includes each bound voice sample URL alongside the corresponding image URL in the extension payload.
+- A voice binding adds a model input; this is not a claim that every requested speech or identity will be generated perfectly. Actual media quality remains untested because no inference test was authorized.
+
+## Limits, quote and independent audio
+
+- Limits are taken from each actual endpoint row's `modelLimit`. Current selected 2.5 Pro variants allow 10 reference audio inputs, each 2–30 seconds, combined at most 30 seconds, size at most 15 MiB. Selected 2.0 variants allow 3, each 2–15 seconds, combined at most 15 seconds, size at most 15 MiB. No support is inferred for an endpoint lacking audio limits.
+- Catalog samples use CDN `avinfo` to verify finite positive duration and integer byte size. Local samples are decoded and ffprobed; all constraints are checked before upload. Upload/transcoding uses the existing content-addressed audio path only within a user-created generation task.
+- The observed official quote helper is `qe` in `material-Bz7rJh4B.js`, around 11430: it constructs `{eid,type:1,number,duration,...referenceVideoTotalDuration}` and calls `/storyboard/endpoint/calcToken`. `index-Bsshbw-t.js` `dye` around 1371900 only passes duration and reference video duration. No `referenceAudioTotalDuration` quote parameter exists in these production callers. Ordinary video continues to use the official duration quote; extension retains the official source-video reference duration quote. No invented audio surcharge parameter or fixed-final-price claim is introduced. Existing pre-submit requoting and amount-change checks still apply.
+- Independent audio uses exactly one bound picture as identity metadata (`images:[]`, `image_index:1`). The picture is not a Seed image input. A catalog voice is resolved again from the current account; a local sample goes through the existing audio-reference conversion/upload. Seed consumes `references:[{audio_url:...}]`; Text Voiceover consumes `inputPayload.audio`. Original prompt/input is unchanged. Competing reference audio, extra images, multiple speakers or a conflicting dedicated voice model fail with an actionable error.
+- The existing persisted task ledger, unknown-submission reconciliation, five-second policy and one-shot approval guards remain in charge of all paid calls. Binding and preview do not create tasks. All new tests use fake upstreams.
+
+Evidence source directory: `D:\BeefTV-Dreama-Bridge\evidence\web-assets`.
+Additional downloaded production selector: `C:\Users\JT\.codex\visualizations\2026\10\31\01a19300-06f2-7650-b3ee-65d4514566b3\VoiceSelectorModal-B339lT2t.js`.

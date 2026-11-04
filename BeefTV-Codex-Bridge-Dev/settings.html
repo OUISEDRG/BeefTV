@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本机 Codex · 推理强度</title>
+  <style>
+    :root{color-scheme:dark;font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#111315;color:#eef0f3;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0;padding:52px 22px 40px}main{max-width:760px;margin:0 auto}
+    .eyebrow{margin:0 0 10px;color:#95bba9;font-size:13px;letter-spacing:.06em}h1{margin:0 0 18px;font-size:30px;font-weight:650;letter-spacing:-.02em}
+    .intro{margin:0 0 28px;color:#b5bdc7;line-height:1.85;font-size:15px}.intro strong{color:#eef0f3;font-weight:600}
+    .card{border:1px solid #343a41;border-radius:16px;background:#1a1e22;padding:26px;box-shadow:0 14px 50px #0002}
+    .field+.field{margin-top:24px}label{display:block;margin-bottom:10px;font-size:14px;font-weight:600}select{width:100%;min-height:46px;border:1px solid #4b545e;border-radius:9px;padding:11px 38px 11px 13px;background:#121619;color:#eef0f3;font:inherit;font-size:15px}select:focus-visible,button:focus-visible{outline:2px solid #a0d4b7;outline-offset:3px}select:disabled{opacity:.55}
+    .hint{margin:10px 0 0;color:#98a5b0;font-size:13px;line-height:1.7;min-height:22px}.state{margin:22px 0 0;border-top:1px solid #343a41;padding-top:17px;color:#c2cbd2;font-size:14px;line-height:1.8;overflow-wrap:anywhere}
+    .actions{display:flex;gap:12px;align-items:center;margin-top:23px;flex-wrap:wrap}button{border:1px solid transparent;border-radius:9px;padding:12px 18px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}button:disabled{opacity:.4;cursor:default}.primary{background:#a3d5b8;color:#14271d}.secondary{background:transparent;border-color:#49535d;color:#d2d9df}.badge{font-size:12px;color:#e6c58d}
+    .notice{margin:22px 0 0;padding:15px 17px;border:1px solid #37444b;border-radius:10px;background:#172027;color:#b9cbd6;font-size:14px;line-height:1.8;white-space:pre-wrap}.notice[data-tone="success"]{border-color:#3b5b49;background:#17251d;color:#b6dcc5}.notice[data-tone="error"]{border-color:#724d42;background:#2b1d19;color:#f1c1ac}
+    .footer{margin:22px 2px 0;color:#84919c;font-size:12px;line-height:1.9}.footer p{margin:3px 0}[hidden]{display:none!important}
+    @media(max-width:520px){body{padding:30px 16px}h1{font-size:25px}.card{padding:20px}.actions button{flex:1}}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">BEEFTV × 本机 CODEX</p>
+    <h1>设置各模型的推理强度</h1>
+    <p class="intro"><strong>使用哪个模型，请在 BeefTV 中选择。</strong><br>这个页面只设置每个模型的推理强度，同一模型的文本生成和助手调用共用该设置。</p>
+    <section class="card" aria-label="推理强度设置">
+      <div class="field">
+        <label for="model">要配置的模型</label>
+        <select id="model" disabled aria-describedby="model-hint"></select>
+        <p class="hint" id="model-hint">正在读取本机可用模型…</p>
+      </div>
+      <div class="field">
+        <label for="effort">推理强度</label>
+        <select id="effort" disabled aria-describedby="effort-hint"></select>
+        <p class="hint" id="effort-hint">只显示所选模型支持的档位。</p>
+      </div>
+      <p class="state" id="saved-state">尚未读取设置。</p>
+      <div class="actions">
+        <button class="primary" id="save" type="button" disabled>保存强度</button>
+        <button class="secondary" id="refresh" type="button">刷新设置</button>
+        <span class="badge" id="dirty" hidden>此模型有未保存的修改</span>
+      </div>
+    </section>
+    <p class="notice" id="notice" role="status" aria-live="polite">这里只读取和保存本机设置，不会发起模型生成。</p>
+    <div class="footer">
+      <p>保存后，从下一次新请求开始生效；正在处理的任务保持原设置。</p>
+      <p>强度越高，通常需要更多思考时间。选择“跟随模型默认”可恢复该模型的默认档位。</p>
+      <p>本页设置同时用于文本节点和助手；BeefTV 原有的“思考”开关不会覆盖这里的选择。</p>
+    </div>
+  </main>
+  <script id="settings-script">
+  (() => {
+    'use strict';
+    const csrfToken = '__CSRF_TOKEN__';
+    const el = Object.fromEntries(['model','effort','model-hint','effort-hint','saved-state','save','refresh','dirty','notice'].map(id => [id, document.getElementById(id)]));
+    const names = {none:'关闭',minimal:'极低',low:'低',medium:'中',high:'高',xhigh:'更高',max:'最高',ultra:'极致'};
+    const descriptions = {low:'较少的思考投入，通常响应更快。',medium:'平衡思考投入与响应时间。',high:'增加思考投入，适合需要多步分析的任务。',xhigh:'进一步增加思考投入，响应可能更慢。',max:'提供很高的思考投入，复杂任务可能等待更久。',ultra:'该模型提供的最高推理档位，通常需要更长时间；具体效果以实际任务为准。'};
+    let data = null;
+    let selected = '';
+    let busy = false;
+    let needsRefresh = false;
+    // Each model owns its draft. Switching the select never carries a draft to another model.
+    const drafts = new Map();
+    const effortName = value => names[value] ? `${names[value]}（${value}）` : value;
+    const savedEffort = id => Object.prototype.hasOwnProperty.call(data.overrides, id) ? data.overrides[id] : null;
+    const modelById = id => data && data.models.find(model => model.id === id);
+    const optionsFor = model => model.supportedReasoningEfforts.map(option => option.reasoningEffort);
+    const effectiveDraft = id => drafts.has(id) ? drafts.get(id) : savedEffort(id);
+    const isDirty = id => data && modelById(id) && effectiveDraft(id) !== savedEffort(id);
+    function announce(message, tone = '') {
+      el.notice.textContent = message;
+      el.notice.dataset.tone = tone;
+    }
+    function option(value, title) {
+      const item = document.createElement('option');
+      item.value = value;
+      item.textContent = title;
+      return item;
+    }
+    function controls() {
+      const ready = Boolean(data && modelById(selected));
+      el.model.disabled = busy || !ready;
+      el.effort.disabled = busy || !ready;
+      el.save.disabled = busy || needsRefresh || !ready || !isDirty(selected);
+      el.refresh.disabled = busy;
+      el.dirty.hidden = !isDirty(selected);
+      el.save.textContent = busy ? '正在处理…' : '保存强度';
+    }
+    function render() {
+      if (!data) { controls(); return; }
+      el.model.replaceChildren(...data.models.map(model => option(model.id, model.displayName && model.displayName !== model.id ? `${model.displayName} · ${model.id}` : model.id)));
+      if (!modelById(selected)) selected = data.models[0] ? data.models[0].id : '';
+      el.model.value = selected;
+      const model = modelById(selected);
+      if (!model) {
+        el.effort.replaceChildren();
+        el['model-hint'].textContent = '当前没有可配置的 Codex 模型。';
+        el['saved-state'].textContent = '没有修改任何模型设置。';
+        controls(); return;
+      }
+      const defaultLabel = effortName(model.defaultReasoningEffort || '未指定');
+      const choices = [option('', `跟随模型默认 · ${defaultLabel}`), ...model.supportedReasoningEfforts.map(item => option(item.reasoningEffort, effortName(item.reasoningEffort)))];
+      el.effort.replaceChildren(...choices);
+      const draft = effectiveDraft(selected);
+      el.effort.value = draft === null ? '' : draft;
+      el['model-hint'].textContent = '此处的选择只决定正在配置哪一个模型，不会切换 BeefTV 的默认模型。';
+      el['effort-hint'].textContent = draft === null ? `使用该模型声明的默认档位：${defaultLabel}。` : descriptions[draft] || `为此模型使用${effortName(draft)}档位。`;
+      const saved = savedEffort(selected);
+      el['saved-state'].textContent = `已保存：${saved === null ? `跟随模型默认 · ${defaultLabel}` : effortName(saved)}。${isDirty(selected) ? '当前修改尚未保存。' : '当前选择与已保存设置一致。'}`;
+      controls();
+    }
+    function validate(next) {
+      if (!next || !Array.isArray(next.models) || !Number.isSafeInteger(next.revision) || next.revision < 0 || !next.overrides || typeof next.overrides !== 'object' || Array.isArray(next.overrides)) throw new Error('设置接口返回了无效数据，请刷新后重试。');
+      const seen = new Set();
+      for (const model of next.models) {
+        if (!model || typeof model.id !== 'string' || !model.id || seen.has(model.id) || !Array.isArray(model.supportedReasoningEfforts) || model.supportedReasoningEfforts.some(item => !item || typeof item.reasoningEffort !== 'string' || !item.reasoningEffort)) throw new Error('模型列表格式无效，未修改任何设置。');
+        seen.add(model.id);
+      }
+      return next;
+    }
+    async function readData() {
+      const response = await fetch('/settings/data', {method:'GET',credentials:'same-origin',cache:'no-store'});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body && body.error && body.error.message || `读取设置失败（${response.status}）。`);
+      return validate(body);
+    }
+    function accept(next) {
+      data = next;
+      for (const [id, effort] of drafts) {
+        const model = modelById(id);
+        if (!model || effort !== null && !optionsFor(model).includes(effort) || effort === savedEffort(id)) drafts.delete(id);
+      }
+      needsRefresh = false;
+    }
+    async function refresh() {
+      if (busy) return;
+      busy = true; controls();
+      try {
+        accept(await readData());
+        announce('已读取最新设置。未保存的修改按模型保留；此操作没有发起生成。');
+      } catch (error) {
+        needsRefresh = true;
+        announce(error.message || '读取失败，请稍后刷新。', 'error');
+      } finally { busy = false; render(); }
+    }
+    el.model.addEventListener('change', () => {
+      if (busy) { el.model.value = selected; return; }
+      selected = el.model.value;
+      render();
+      announce(isDirty(selected) ? '已切换模型，并恢复这个模型自己的未保存修改。其他模型的草稿也会保留。' : '已切换要配置的模型。尚未保存的修改不会自动应用到其他模型。');
+    });
+    el.effort.addEventListener('change', () => {
+      if (busy || !modelById(selected)) return;
+      const effort = el.effort.value === '' ? null : el.effort.value;
+      if (effort !== null && !optionsFor(modelById(selected)).includes(effort)) { render(); return; }
+      drafts.set(selected, effort);
+      render();
+      announce(isDirty(selected) ? '修改尚未保存。点击“保存强度”后，才会影响该模型的下一次新请求。' : '当前选择与已保存设置一致。');
+    });
+    el.refresh.addEventListener('click', refresh);
+    el.save.addEventListener('click', async () => {
+      if (busy || needsRefresh || !data || !isDirty(selected)) return;
+      // Capture one immutable target before awaiting. Never read the dropdown after POST starts.
+      const target = {model:selected, effort:effectiveDraft(selected), expectedRevision:data.revision};
+      const model = modelById(target.model);
+      const title = model.displayName || model.id;
+      busy = true; controls();
+      let submitted = false;
+      try {
+        const response = await fetch('/settings/data', {method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify(target)});
+        let body = null;
+        try { body = await response.json(); } catch (_) { /* Status remains authoritative. */ }
+        if (!response.ok) {
+          if (response.status === 409) {
+            accept(await readData());
+            throw new Error('设置已在其他窗口更新。已读取最新版本，并保留你的草稿；请核对后再保存。');
+          }
+          throw new Error(body && body.error && body.error.message || `保存失败（${response.status}）。`);
+        }
+        submitted = true;
+        drafts.delete(target.model);
+        accept(await readData());
+        announce(`已保存「${title}」的推理强度。下一次新请求生效，当前任务保持原设置。此次保存没有发起生成。`, 'success');
+      } catch (error) {
+        if (submitted) {
+          needsRefresh = true;
+          announce('设置已提交成功，但重新读取失败。请点击“刷新设置”核对；无需重复保存。当前任务保持原设置。', 'error');
+        } else {
+          announce(error.message || '保存未完成，请刷新设置后核对。', 'error');
+        }
+      } finally { busy = false; render(); }
+    });
+    refresh();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,879 @@
+{
+  "schemaVersion": 1,
+  "source": "Dreama CLI1.0.5 capability list --kind image --raw",
+  "observedAt": "2026-11-01T04:48:00+08:00",
+  "paidEndToEndVerified": false,
+  "localAssistantReachable": false,
+  "items": [
+    {
+      "eid": "b4618c22‑0e91‑4050‑8255‑d128603ef375",
+      "name": "九万 3.0",
+      "modelGroupCode": "Model_Wan2.2",
+      "vendorGroupCode": "Vendor_JiuWan",
+      "vendorGroupAlias": "九万 · Wan",
+      "modelGroupAlias": "九万 2.2",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9",
+        "8:11"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":3,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":3,\"imageSizeMin\":0,\"imageSizeMax\":10,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 宽高比 1:8~8:1\\n2. 宽高 [240,8000]\\n3. 用户输入提示词。支持中英文，长度不超过 5000 个字符\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "5175902b‑d234‑417c‑9781‑f924bc106431",
+      "name": "九万 3.0 Pro",
+      "modelGroupCode": "Model_Wan2.2",
+      "vendorGroupCode": "Vendor_JiuWan",
+      "vendorGroupAlias": "九万 · Wan",
+      "modelGroupAlias": "九万 2.2",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9",
+        "8:11"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 7
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":3,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":3,\"imageSizeMin\":0,\"imageSizeMax\":10,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 宽高比 1:8~8:1\\n2. 宽高 [240,8000]\\n3. 用户输入提示词。支持中英文，长度不超过 5000 个字符\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "8b215101-4898-42c7-9aa6-6eff309a44d7",
+      "name": "即梦 4.0",
+      "modelGroupCode": "Model_JiMeng",
+      "vendorGroupCode": "Vendor_JiMeng",
+      "vendorGroupAlias": "小助手",
+      "modelGroupAlias": null,
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 0
+        },
+        {
+          "resolution": "4K",
+          "token": 0
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":6,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":6,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"6图 大小不限制\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 1,
+      "disabledReason": "需独立即梦小助手及对应地区密钥；当前未核实本机37861服务可用，不能使用剧梦云端生图接口代替。"
+    },
+    {
+      "eid": "6260ec25-9a4e-42be-b3f6-49b0fecb45ae",
+      "name": "九万 2.7",
+      "modelGroupCode": "Model_Wan2.7",
+      "vendorGroupCode": "Vendor_JiuWan",
+      "vendorGroupAlias": "九万 · Wan",
+      "modelGroupAlias": "九万 2.7",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "1K",
+          "token": 2
+        },
+        {
+          "resolution": "2K",
+          "token": 2
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":9,\"totalSizeMin\":0,\"totalSizeMax\":180,\"imageMin\":0,\"imageMax\":9,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 宽高比 1:8~8:1\\n2. 宽高 [240,8000]\\n3. 用户输入提示词。支持中英文，长度不超过 5000 个字符\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "69d6a7d0-1645-47a8-9494-f1e595c6cf3f",
+      "name": "九极 2.0（促销1）",
+      "modelGroupCode": "Model_Google_JiuJi_01",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销1）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "1K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"10图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "ff49bb7c-a9f9-4376-8ef2-cd6ef554b717",
+      "name": "即梦 5.0",
+      "modelGroupCode": "Model_JiMeng_50",
+      "vendorGroupCode": "Vendor_JiMeng",
+      "vendorGroupAlias": "小助手",
+      "modelGroupAlias": "即梦 5.0",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 0
+        },
+        {
+          "resolution": "4K",
+          "token": 0
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":6,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":6,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"6图 大小不限制\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 1,
+      "disabledReason": "需独立即梦小助手及对应地区密钥；当前未核实本机37861服务可用，不能使用剧梦云端生图接口代替。"
+    },
+    {
+      "eid": "1745f580-7c16-441b-ad96-02e0262b3562",
+      "name": "即梦 4.6",
+      "modelGroupCode": "Model_JiMeng_46",
+      "vendorGroupCode": "Vendor_JiMeng",
+      "vendorGroupAlias": "小助手",
+      "modelGroupAlias": "即梦 4.6",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 0
+        },
+        {
+          "resolution": "4K",
+          "token": 0
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":6,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":6,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"6图 大小不限制\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 1,
+      "disabledReason": "需独立即梦小助手及对应地区密钥；当前未核实本机37861服务可用，不能使用剧梦云端生图接口代替。"
+    },
+    {
+      "eid": "29ce90ec-b0f2-4f17-82eb-24e9182fb621",
+      "name": "九梦 4.0",
+      "modelGroupCode": "Model_Doubao_Seedream40",
+      "vendorGroupCode": "Vendor_DouBao_Seedream",
+      "vendorGroupAlias": "九梦 · Seedream",
+      "modelGroupAlias": "九梦 4.0",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "1K",
+          "token": 2
+        },
+        {
+          "resolution": "2K",
+          "token": 2
+        },
+        {
+          "resolution": "4K",
+          "token": 2
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":420,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 长宽比 1/16~16\\n2. 长或者宽 > 14px\\n3. 单图总像素 <=6000x6000\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "a35ad01e-432a-4369-a78d-e58fe712f451",
+      "name": "九极 2.0（促销2）",
+      "modelGroupCode": "Model_Google_JiuJi_02",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销2）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9",
+        "8:11"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":16,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":16,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"16图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "92b6589f-a904-424b-89b7-034fe578510b",
+      "name": "九极 2.0（促销3）",
+      "modelGroupCode": "Model_Google_JiuJi_03",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销3）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 6
+        },
+        {
+          "resolution": "4K",
+          "token": 10
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":16,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":16,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"16图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "7cce79d4-255f-4605-be80-d2d53a41e7ae",
+      "name": "即梦 4.6（日本）",
+      "modelGroupCode": "Model_JiMeng_Japan_46",
+      "vendorGroupCode": "Vendor_JiMeng",
+      "vendorGroupAlias": "小助手",
+      "modelGroupAlias": "即梦 4.6",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 0
+        },
+        {
+          "resolution": "4K",
+          "token": 0
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":6,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":6,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"6图 大小不限制\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 1,
+      "disabledReason": "需独立即梦小助手及对应地区密钥；当前未核实本机37861服务可用，不能使用剧梦云端生图接口代替。"
+    },
+    {
+      "eid": "a525cea8-9d8a-4d3e-967a-40bc676ca840",
+      "name": "即梦 5.0（日本）",
+      "modelGroupCode": "Model_JiMeng_Japan_50",
+      "vendorGroupCode": "Vendor_JiMeng",
+      "vendorGroupAlias": "小助手",
+      "modelGroupAlias": "即梦 5.0",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 0
+        },
+        {
+          "resolution": "4K",
+          "token": 0
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":6,\"totalSizeMin\":0,\"totalSizeMax\":9999,\"imageMin\":0,\"imageMax\":6,\"imageSizeMin\":0,\"imageSizeMax\":9999,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"6图 大小不限制\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 1,
+      "disabledReason": "需独立即梦小助手及对应地区密钥；当前未核实本机37861服务可用，不能使用剧梦云端生图接口代替。"
+    },
+    {
+      "eid": "44e45baa-07d4-462a-bea5-b62c15036fe3",
+      "name": "九极 2.5F（促销1）",
+      "modelGroupCode": "Model_Google_JiuJi_01",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销1）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "1K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"10图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "3e31fc37-e640-4054-bce1-ec80eb30d5bb",
+      "name": "九梦 4.5",
+      "modelGroupCode": "Model_Doubao_Seedream45",
+      "vendorGroupCode": "Vendor_DouBao_Seedream",
+      "vendorGroupAlias": "九梦 · Seedream",
+      "modelGroupAlias": "九梦 4.5",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 3
+        },
+        {
+          "resolution": "4K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":420,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 长宽比 1/16~16\\n2. 长或者宽 > 14px\\n3. 单图总像素 <=6000x6000\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "de991cf8-1e51-41d0-b1a4-7c74ca1f1cfc",
+      "name": "九极 2.5F（促销2）",
+      "modelGroupCode": "Model_Google_JiuJi_02",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销2）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9",
+        "8:11"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":16,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":16,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"16图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "7fa38b0a-d222-4a8b-a605-7b55a8bc807a",
+      "name": "九梦 5.0",
+      "modelGroupCode": "Model_Doubao_Seedream50",
+      "vendorGroupCode": "Vendor_DouBao_Seedream",
+      "vendorGroupAlias": "九梦 · Seedream",
+      "modelGroupAlias": "九梦 5.0",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 3
+        },
+        {
+          "resolution": "3K",
+          "token": 3
+        },
+        {
+          "resolution": "4K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":420,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 长宽比 1/16~16\\n2. 长或者宽 > 14px\\n3. 单图总像素 <=6000x6000\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "edd38e9d-913d-43c1-a2e6-9bd10ebc9099",
+      "name": "九极 2.5F（促销3）",
+      "modelGroupCode": "Model_Google_JiuJi_03",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销3）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 6
+        },
+        {
+          "resolution": "4K",
+          "token": 10
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":16,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":16,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"16图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "cf0025c8-31af-488b-89ed-081e4717a69e",
+      "name": "九极 2.5S（促销1）",
+      "modelGroupCode": "Model_Google_JiuJi_01",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销1）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "1K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"10图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "3d07a484-5099-4f2a-8877-82c641a69e27",
+      "name": "九梦 5.0 Pro",
+      "modelGroupCode": "Model_Doubao_Seedream50Pro",
+      "vendorGroupCode": "Vendor_DouBao_Seedream",
+      "vendorGroupAlias": "九梦 · Seedream",
+      "modelGroupAlias": "seedream-5-pro",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "1K",
+          "token": 3
+        },
+        {
+          "resolution": "2K",
+          "token": 6
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":10,\"totalSizeMin\":0,\"totalSizeMax\":420,\"imageMin\":0,\"imageMax\":10,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 长宽比 1/16~16\\n2. 长或者宽 > 14px\\n3. 单图总像素 <=6000x6000\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "ecb9799f-ec10-414e-8bb0-cd5e497a666b",
+      "name": "九蕉2（促销1）",
+      "modelGroupCode": "Model_Google_JiuJiao_01",
+      "vendorGroupCode": "Vendor_Google",
+      "vendorGroupAlias": "九蕉 · Banana",
+      "modelGroupAlias": "九蕉2（促销版1）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 5
+        },
+        {
+          "resolution": "4K",
+          "token": 7
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":98,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 受模型输入 token 限制约束：输入 token 上限 65536\\n2. 其中最多 6 张对象高保真参考图，最多 5 个角色保持一致性\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "58662619-ad71-406d-b756-c29fd067c567",
+      "name": "九极 2.5S（促销2）",
+      "modelGroupCode": "Model_Google_JiuJi_02",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销2）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9",
+        "8:11"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 3
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":16,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":16,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"16图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "ea4a4b61-f7c2-4ff6-b2d1-133a50ef9f6f",
+      "name": "九蕉2（促销2）",
+      "modelGroupCode": "Model_Google_JiuJiao_02",
+      "vendorGroupCode": "Vendor_Google",
+      "vendorGroupAlias": "九蕉 · Banana",
+      "modelGroupAlias": "九蕉2（促销版2）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 5
+        },
+        {
+          "resolution": "4K",
+          "token": 7
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":98,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 受模型输入 token 限制约束：输入 token 上限 131,072\\n2. 其中最多 10 张对象高保真参考图，最多 4 个角色保持一致性\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "4f64c738-88da-4a14-bcc4-09d9da79738b",
+      "name": "九极 2.5S（促销3）",
+      "modelGroupCode": "Model_Google_JiuJi_03",
+      "vendorGroupCode": "Vendor_JiuJi",
+      "vendorGroupAlias": "九极 · GPT Image",
+      "modelGroupAlias": "九极（促销3）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 6
+        },
+        {
+          "resolution": "4K",
+          "token": 10
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":16,\"totalSizeMin\":0,\"totalSizeMax\":320,\"imageMin\":0,\"imageMax\":16,\"imageSizeMin\":0,\"imageSizeMax\":20,\"videoMin\":0,\"videoMax\":0,\"videoSizeMin\":0,\"videoSizeMax\":0,\"videoDurationMin\":0,\"videoDurationMax\":0,\"totalVideoDurationMax\":0,\"audioMin\":0,\"audioMax\":0,\"audioSizeMin\":0,\"audioSizeMax\":0,\"audioDurationMin\":0,\"audioDurationMax\":0,\"totalAudioDurationMax\":0,\"allowAudioOnly\":false,\"text\":\"16图 单张<=20M\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "dc71c9f0-0f47-4823-8578-22c5f5a09de8",
+      "name": "九蕉Pro（促销1）",
+      "modelGroupCode": "Model_Google_JiuJiao_Pro_01",
+      "vendorGroupCode": "Vendor_Google",
+      "vendorGroupAlias": "九蕉 · Banana",
+      "modelGroupAlias": "九蕉Pro（促销版1）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 10
+        },
+        {
+          "resolution": "4K",
+          "token": 12
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":98,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 受模型输入 token 限制约束：输入 token 上限 65536\\n2. 其中最多 6 张对象高保真参考图，最多 5 个角色保持一致性\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "72b21669-d78e-47bb-93b6-43ed29be370c",
+      "name": "九蕉Pro（促销2）",
+      "modelGroupCode": "Model_Google_JiuJiao_Pro_02",
+      "vendorGroupCode": "Vendor_Google",
+      "vendorGroupAlias": "九蕉 · Banana",
+      "modelGroupAlias": "九蕉Pro（促销版2）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 6
+        },
+        {
+          "resolution": "4K",
+          "token": 10
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":98,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 受模型输入 token 限制约束：输入 token 上限 65536\\n2. 其中最多 6 张对象高保真参考图，最多 5 个角色保持一致性\"}",
+      "imageMin": 1,
+      "imageMax": 1,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    },
+    {
+      "eid": "90ee8c43-5377-454c-9c7b-e4a7c368667d",
+      "name": "九蕉Pro（备用）",
+      "modelGroupCode": "Model_Google_JiuJiao_Pro_03",
+      "vendorGroupCode": "Vendor_Google",
+      "vendorGroupAlias": "九蕉 · Banana",
+      "modelGroupAlias": "九蕉Pro（备用版）",
+      "proportionList": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "resolutionTokens": [
+        {
+          "resolution": "2K",
+          "token": 16
+        },
+        {
+          "resolution": "4K",
+          "token": 26
+        }
+      ],
+      "modelLimit": "{\"totalMin\":0,\"totalMax\":14,\"totalSizeMin\":0,\"totalSizeMax\":98,\"imageMin\":0,\"imageMax\":14,\"imageSizeMin\":0,\"imageSizeMax\":30,\"videoMin\":0,\"videoMax\":9999,\"videoSizeMin\":0,\"videoSizeMax\":9999,\"videoDurationMin\":0,\"videoDurationMax\":9999,\"totalVideoDurationMax\":9999,\"audioMin\":0,\"audioMax\":9999,\"audioSizeMin\":0,\"audioSizeMax\":9999,\"audioDurationMin\":0,\"audioDurationMax\":9999,\"totalAudioDurationMax\":9999,\"allowAudioOnly\":false,\"text\":\"1. 受模型输入 token 限制约束：输入 token 上限 65536\\n2. 其中最多 6 张对象高保真参考图，最多 5 个角色保持一致性\"}",
+      "imageMin": 1,
+      "imageMax": 8,
+      "endpointMode": 2,
+      "category": 1,
+      "isExternal": 0
+    }
+  ]
+}
