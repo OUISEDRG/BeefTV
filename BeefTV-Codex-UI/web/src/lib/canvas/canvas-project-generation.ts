@@ -242,11 +242,13 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
         errorDetails: undefined,
         generationErrorCode: undefined,
         generationErrorSummary: undefined,
+        generationProviderCode: undefined,
         generationPreflightError: undefined,
         failedPromptFingerprint: undefined,
         failedInputFingerprint: undefined,
     };
     delete next.taskId;
+    delete next.mediaVersionSelected;
     delete next.taskType;
     delete next.taskOutcome;
     delete next.taskOutputIndex;

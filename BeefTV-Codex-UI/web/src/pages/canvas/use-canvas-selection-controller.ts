@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEven
 
 import { applyCanvasNodeDragPreview, applyCanvasNodeSelectionPreview, applyCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateNodeAlignment, createNodeAlignmentContext, sameStringSet, type NodeAlignmentContext } from "@/lib/canvas/canvas-project-domain";
-import { applyFrameDrop, buildCanvasFrameDropIndex, findFrameDropTargetFromIndex, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
+import { applyFrameDrop, buildCanvasFrameDropIndex, findFrameDropTargetFromIndex, getFrameDescendantIds, isFrameNode } from "@/lib/canvas/canvas-frame";
 import { applyCanvasSelectionStrategy, canvasSelectionHitsBounds, createCanvasSelectionBounds, createCanvasSelectionSpatialIndexCache, resolveCanvasSelectionHitMode, resolveCanvasSelectionPreviewDelta, resolveCanvasSelectionStrategy } from "@/lib/canvas/canvas-selection";
 import { canExportWorkflowResult, workflowAtPoint } from "@/lib/canvas/reusable-workflow-instance";
 import { canvasNodeResourceId } from "@/lib/canvas/canvas-resource-id";
@@ -202,12 +202,16 @@ export function useCanvasSelectionController({
             return;
         }
 
-        const draggedNodeIds = currentNodes.filter((node) => nextSelected.has(node.id) && !node.metadata?.locked && !(node.parentId && nextSelected.has(node.parentId))).map((node) => node.id);
         const dragIds = new Set(nextSelected);
+        const selectedFrameDescendants = new Set<string>();
         currentNodes.forEach((node) => {
             if (nextSelected.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
-            if (nextSelected.has(node.id) && isFrameNode(node)) getFrameChildIds(node.id, currentNodes).forEach((childId) => dragIds.add(childId));
+            if (nextSelected.has(node.id) && !node.metadata?.locked && isFrameNode(node)) getFrameDescendantIds(node.id, currentNodes).forEach((childId) => {
+                dragIds.add(childId);
+                selectedFrameDescendants.add(childId);
+            });
         });
+        const draggedNodeIds = currentNodes.filter(node => nextSelected.has(node.id) && !node.metadata?.locked && !selectedFrameDescendants.has(node.id)).map(node => node.id);
         currentNodes.forEach((node) => {
             if (dragIds.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
         });
@@ -339,7 +343,7 @@ export function useCanvasSelectionController({
         const hitNodeIds = new Set(selectionSpatialIndexCacheRef.current
             .get(nodesRef.current)
             .query(queryBounds)
-            .filter((node) => canvasSelectionHitsBounds(queryBounds, canvasNodeBounds(node), selection.hitMode))
+            .filter((node) => !node.metadata?.mediaVersionOwnerId && canvasSelectionHitsBounds(queryBounds, canvasNodeBounds(node), selection.hitMode))
             .map((node) => node.id));
         applyCanvasNodeSelectionPreview(containerRef.current, resolveCanvasSelectionPreviewDelta(gesture.initialSelection, hitNodeIds, selection.strategy));
         if (!commit) return true;

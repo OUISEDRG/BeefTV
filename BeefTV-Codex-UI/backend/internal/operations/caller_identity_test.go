@@ -40,6 +40,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := database.MigrateLocalSchema(db); err != nil {
 		t.Fatal(err)
 	}
@@ -228,8 +229,8 @@ func TestAssistantCannotUseWorkspaceWideOps(t *testing.T) {
 		t.Fatalf("助手执行 asset.list 应被拒: %v", err)
 	}
 	manual := h.registry.List(operations.ManualCaller(false))
-	if len(manual) != 41 {
-		t.Fatalf("手工 UI 应看到完整 41 项能力: %d", len(manual))
+	if len(manual) != 42 {
+		t.Fatalf("手工 UI 应看到完整 42 项能力: %d", len(manual))
 	}
 	foundDocumentCommit := false
 	for _, descriptor := range manual {

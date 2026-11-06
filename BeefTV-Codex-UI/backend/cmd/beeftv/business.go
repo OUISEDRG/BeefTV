@@ -208,7 +208,7 @@ func runBusiness(c *client, args []string) error {
 	}
 	fs := flag.NewFlagSet("business "+args[0], flag.ContinueOnError)
 	id := fs.String("tool", "", "discovered business tool ID")
-	params := fs.String("params", "{}", "JSON path/query/body/file parameters")
+	params := fs.String("params", "{}", "JSON path/query/body/file parameters; - reads stdin (up to 8 MiB)")
 	file := fs.String("file", "", "local file to upload; read by CLI, never server")
 	target := fs.String("target", "resource", "resource, skill or plugin")
 	operationID := fs.String("operation-id", "", "stable idempotency key; reuse the same value when retrying (required when submitting paid generation)")
@@ -224,7 +224,11 @@ func runBusiness(c *client, args []string) error {
 		return emitJSON(tools)
 	}
 	var input businessArgs
-	if err = json.Unmarshal([]byte(*params), &input); err != nil {
+	rawParams, err := readJSONParams(*params, os.Stdin)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(rawParams, &input); err != nil {
 		return err
 	}
 	if flagID := strings.TrimSpace(*operationID); flagID != "" {
@@ -273,16 +277,17 @@ func runOpsCall(c *client, args []string) error {
 	}
 	operation := args[0]
 	fs := flag.NewFlagSet("ops call", flag.ContinueOnError)
-	params := fs.String("params", "{}", "operation JSON parameters")
+	params := fs.String("params", "{}", "operation JSON parameters; - reads stdin (up to 8 MiB)")
 	key := fs.String("operation-id", "", "stable write idempotency key")
 	_ = fs.Bool("json", true, "JSON output")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	if !json.Valid([]byte(*params)) {
-		return fmt.Errorf("invalid JSON params")
+	rawParams, err := readJSONParams(*params, os.Stdin)
+	if err != nil {
+		return err
 	}
-	result, err := c.callOp(operation, *key, json.RawMessage(*params))
+	result, err := c.callOp(operation, *key, rawParams)
 	if err != nil {
 		return err
 	}

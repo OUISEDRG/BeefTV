@@ -11,6 +11,17 @@ import (
 )
 
 func (s *Service) assistantGenerationConfig(target operations.GenerationTarget) (map[string]any, error) {
+	config, err := s.productionModelConfig(target)
+	if err != nil {
+		return nil, err
+	}
+	if err := operations.ValidateStandaloneGenerationProtocol(stringValue(config["interfaceType"])); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func (s *Service) productionModelConfig(target operations.GenerationTarget) (map[string]any, error) {
 	body, err := s.ReadLocalModelConfig()
 	if err != nil {
 		return nil, err
@@ -80,9 +91,6 @@ func (s *Service) assistantGenerationConfig(target operations.GenerationTarget) 
 	}
 	if strings.TrimSpace(stringValue(config["count"])) == "" {
 		config["count"] = "1"
-	}
-	if err := operations.ValidateStandaloneGenerationProtocol(stringValue(config["interfaceType"])); err != nil {
-		return nil, err
 	}
 	return config, nil
 }

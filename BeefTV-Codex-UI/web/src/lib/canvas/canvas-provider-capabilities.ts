@@ -17,18 +17,27 @@ export function canvasVideoReversePromptAvailable(config: AiConfig): boolean {
     return channel.id !== "codex-local" || resolveModelRequestConfig(selected, selected.model).interfaceType !== "chat-completion";
 }
 
-export type CanvasVideoOperation = "extend" | "inpaint" | "draft_to_final";
+export type CanvasVideoProcessingOperation = "extend" | "inpaint" | "upscale";
+export type CanvasVideoOperation = CanvasVideoProcessingOperation | "draft_to_final";
 export type CanvasVideoOperationSupport = { available: boolean; model?: string; reason?: string };
 
-/** The extension protocol uses the ordinary canvas executor, including its frozen project binding. */
+/** Processing adapters use the ordinary canvas executor and its frozen project binding. */
 export function canvasVideoOperationSupport(config: AiConfig, node: CanvasNodeData, operation: CanvasVideoOperation): CanvasVideoOperationSupport {
     const selected = buildGenerationConfig(config, node, "video");
     let model = selected.model;
     const protocol = resolveModelRequestConfig(selected, model).interfaceType;
-    if (isDreamaProtocol(protocol)) {
+    if (operation === "upscale") {
+        const candidates = selectableModelsByCapability(config, "video");
+        model = [model, ...candidates].find(value => candidates.includes(value)
+            && resolveModelRequestConfig(config, value).interfaceType === "dreama-enhancement-async"
+            && modelCapabilityConfigFor(config, value).video?.operations.includes("upscale")
+            && resolveModelChannel(config, value).enabled !== false
+            && channelHasGenerationCredential(resolveModelChannel(config, value), value)) || "";
+        if (!model) return { available: false, reason: "尚未配置可用的剧梦视频增强渠道" };
+    } else if (isDreamaProtocol(protocol)) {
         if (operation !== "extend") return { available: false, reason: "当前剧梦渠道尚未接入此视频处理功能" };
         const candidates = selectableModelsByCapability(config, "video");
-        model = [model, ...candidates].find(value => candidates.includes(value) && resolveModelRequestConfig(config, value).interfaceType === "dreama-extension-async" && channelHasGenerationCredential(resolveModelChannel(config, value), value)) || "";
+        model = [model, ...candidates].find(value => candidates.includes(value) && resolveModelRequestConfig(config, value).interfaceType === "dreama-extension-async" && resolveModelChannel(config, value).enabled !== false && channelHasGenerationCredential(resolveModelChannel(config, value), value)) || "";
         if (!model) return { available: false, reason: "尚未配置可用的剧梦视频延长渠道" };
     } else if (hasDeclaredModelCapability(selected, model, "video") && !modelCapabilityConfigFor(selected, model).video?.operations.includes(operation)) {
         return { available: false, reason: "当前视频模型不支持此处理功能" };

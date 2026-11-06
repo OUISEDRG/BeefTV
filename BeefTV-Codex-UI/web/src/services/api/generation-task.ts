@@ -244,9 +244,9 @@ async function prepareGenerationReferences({
     metadata,
 }: Pick<BackendGenerationTaskOptions, "config" | "mode" | "referenceImages" | "referenceVideos" | "referenceAudios" | "mask" | "metadata">): Promise<PreparedGenerationReferences> {
     const protocol = resolveModelRequestConfig(config, config.model).interfaceType || "";
-    const providerOptions = metadata?.providerOptions as Record<string, { character_voices?: Array<{ voice_id?: string; audio?: string }> }> | undefined;
+    const providerOptions = metadata?.providerOptions as Record<string, { character_voices?: Array<{ voice_id?: string; sampleResourceId?: string }> }> | undefined;
     const voices = providerOptions?.[protocol]?.character_voices;
-    const hasVoiceSource = referenceAudios.length > 0 || (Array.isArray(voices) && voices.some((voice) => Boolean(voice?.voice_id?.trim() || voice?.audio?.trim())));
+    const hasVoiceSource = referenceAudios.length > 0 || (Array.isArray(voices) && voices.some((voice) => Boolean(voice?.voice_id?.trim() || voice?.sampleResourceId?.trim())));
     const parameterError = declaredGenerationConfigError(config, mode, { requireVoice: true, hasVoiceSource });
     if (parameterError) throw new Error(parameterError);
     const portraitError = mode === "video" ? portraitGenerationError(config, config.model, config.vquality) : "";

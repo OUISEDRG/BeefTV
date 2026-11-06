@@ -367,7 +367,7 @@ export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connectio
 
 /** Agent 的 @ 菜单覆盖整个画布，而不是只覆盖可作为生成输入的资源节点。 */
 export function buildCanvasAgentMentionReferences(nodes: CanvasNodeData[]): CanvasResourceReference[] {
-    return nodes.map((node, index) => {
+    return nodes.filter(node => !node.metadata?.mediaVersionOwnerId).map((node, index) => {
         const kind = resourceKind(node) || "text";
         const fallbackTitle = `节点 ${index + 1}`;
         return {
@@ -496,6 +496,14 @@ export function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[],
         .filter((node): node is CanvasNodeData => Boolean(node && isResourceNode(node)));
 }
 
+/** Uses the same receiver as the reference shelf and generation input resolver. */
+export function getCanvasReferenceReceiverId(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+    const configConnection = connections.find((connection) => connection.fromNodeId === nodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config);
+    if (!configConnection) return nodeId;
+    const inputs = getContextResourceNodes(configConnection.toNodeId, nodes, connections).filter((node) => node.id !== nodeId);
+    return inputs.length ? configConnection.toNodeId : nodeId;
+}
+
 /**
  * 调整目标节点的素材输入边顺序。连接数组是引用编号的唯一顺序源；只替换相关
  * 输入边所在槽位，避免改变主链和其他节点的连线顺序。
@@ -503,9 +511,7 @@ export function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[],
 export function reorderCanvasResourceConnections(targetNodeId: string, orderedNodeIds: string[], nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const uniqueOrder = [...new Set(orderedNodeIds.filter(Boolean))];
     if (uniqueOrder.length < 2) return connections;
-    const configNodeId = connections.find((connection) => connection.fromNodeId === targetNodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config)?.toNodeId;
-    const configInputs = configNodeId ? getContextResourceNodes(configNodeId, nodes, connections).filter((node) => node.id !== targetNodeId) : [];
-    const receiverId = configInputs.length ? configNodeId! : targetNodeId;
+    const receiverId = getCanvasReferenceReceiverId(targetNodeId, nodes, connections);
     const orderSet = new Set(uniqueOrder);
     const slots = connections
         .map((connection, index) => ({ connection, index }))
@@ -523,15 +529,15 @@ export function reorderCanvasResourceConnections(targetNodeId: string, orderedNo
 }
 
 function getConnectedConfigResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
-    const configConnection = connections.find((connection) => connection.fromNodeId === nodeId && nodes.find((node) => node.id === connection.toNodeId)?.type === CanvasNodeType.Config);
-    if (!configConnection) return [];
-    return getContextResourceNodes(configConnection.toNodeId, nodes, connections).filter((node) => node.id !== nodeId);
+    const receiverId = getCanvasReferenceReceiverId(nodeId, nodes, connections);
+    return receiverId === nodeId ? [] : getContextResourceNodes(receiverId, nodes, connections).filter((node) => node.id !== nodeId);
 }
 
 function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
     const counts: Record<CanvasResourceKind, number> = { image: 0, video: 0, audio: 0, text: 0, skill: 0, character: 0 };
     let drawingCount = 0;
     return nodes.flatMap((node): CanvasResourceReference[] => {
+        if (node.metadata?.mediaVersionOwnerId) return [];
         const kind = resourceKind(node);
         if (!kind) return [];
         const index = node.type === CanvasNodeType.Drawing ? drawingCount++ : counts[kind]++;
@@ -572,7 +578,12 @@ function labelForKind(kind: CanvasResourceKind, index: number) {
     return `文本${index + 1}`;
 }
 
+export function isCanvasTextResourceNode(node: CanvasNodeData) {
+    return resourceKind(node) === "text";
+}
+
 function isResourceNode(node: CanvasNodeData) {
+    if (node.metadata?.mediaVersionOwnerId) return false;
     return Boolean(resourceKind(node));
 }
 

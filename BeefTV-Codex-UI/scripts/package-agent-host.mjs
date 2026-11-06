@@ -56,6 +56,11 @@ export function packageAgentHost({ runtime, target, destination, source = path.j
     run(bundledNode, ['--input-type=module', '-e',
       imports.map(name => `await import(${JSON.stringify(name)});`).join('\n')], stage);
     run(bundledNode, ['--check', 'server.mjs'], stage);
+    // The headless adapter shares the canvas compiler, rather than maintaining
+    // another implementation of reference order, voice mapping and parameters.
+    run(process.execPath, ['build', 'scripts/dreama-canvas-compiler.ts', '--target=node', '--format=esm',
+      '--define', 'import.meta.env={}', '--outfile', path.join(stage, 'dreama-canvas-compiler.mjs')], path.join(root, 'web'));
+    run(bundledNode, ['--check', 'dreama-canvas-compiler.mjs'], stage);
     if (existsSync(destination)) throw new Error(`Refusing to overwrite existing agent-host: ${destination}`);
     cpSync(stage, destination, { recursive: true, dereference: true });
     console.log(`Packaged agent-host with Node ${NODE_VERSION} for ${target}: ${destination}`);

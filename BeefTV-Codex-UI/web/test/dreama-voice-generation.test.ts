@@ -55,8 +55,8 @@ describe("Dreama ordinary-image voice generation", () => {
         const final = compileNodeGenerationReferences(initial, config("dreama-extension-async"), "reference_to_video");
         expect(final.referenceImages.map(item => item.id)).toEqual(["two", "one", "unbound"]);
         const calls: string[] = [];
-        const voices = await buildDreamaCharacterVoices(final.referenceImages, undefined, async id => { calls.push(id); return audioData; });
-        expect(voices).toEqual([{ image_index: 1, name: "女主", audio: audioData }, { image_index: 2, name: "主角", voice_id: "voice-42" }]);
+        const voices = await buildDreamaCharacterVoices(final.referenceImages, undefined, async id => { calls.push(id); return id; });
+        expect(voices).toEqual([{ image_index: 1, name: "女主", sampleResourceId: "res-audio" }, { image_index: 2, name: "主角", voice_id: "voice-42" }]);
         expect(calls).toEqual(["res-audio"]);
         expect(final.prompt).toBe("@图片1 和 @图片2 说话，背景保持。");
     });
@@ -89,8 +89,22 @@ describe("Dreama ordinary-image voice generation", () => {
     test("unknown protocols, malformed bindings, duplicate identity and unsafe samples fail closed", async () => {
         await expect(prepareDreamaVoiceProviderOptions(context([image("a", catalog)]), config("seedance-videos-compatible"), "video", noSample)).rejects.toThrow("不支持");
         await expect(buildDreamaCharacterVoices([image("a", { ...catalog, voiceId: "../file" })], undefined, noSample)).rejects.toThrow("已失效");
-        await expect(buildDreamaCharacterVoices([image("a", catalog), image("a", sample)], undefined, async () => audioData)).rejects.toThrow("重复引用");
+        await expect(buildDreamaCharacterVoices([image("a", catalog), image("a", sample)], undefined, async id => id)).rejects.toThrow("重复引用");
         await expect(buildDreamaCharacterVoices([image("a", sample)], undefined, async () => "D:\\private\\sound.mp3")).rejects.toThrow("已保存的音频资源");
+        await expect(buildDreamaCharacterVoices([image("a", sample)], undefined, async () => audioData)).rejects.toThrow("已保存的音频资源");
+        await expect(buildDreamaCharacterVoices([image("a", sample)], undefined, async () => "different-resource")).rejects.toThrow("已保存的音频资源");
+    });
+
+    test("uploaded voice samples remain resource references in a persisted audio task", async () => {
+        const prepared = prepareDreamaAudioIdentity(context([image("person", sample)]), "audio");
+        const selected = config("dreama-audio-async", "audio");
+        const providerOptions = await prepareDreamaVoiceProviderOptions(prepared, selected, "audio", async id => id);
+        const task = await prepareBackendGenerationTask({ mode: "audio", prompt: prepared.prompt, config: selected,
+            referenceImages: prepared.referenceImages, metadata: { providerOptions } });
+        expect(task.input.metadata).toMatchObject({ providerOptions: {
+            "dreama-audio-async": { character_voices: [{ image_index: 1, name: "女主", sampleResourceId: "res-audio" }] },
+        } });
+        expect(JSON.stringify(task.input)).not.toContain("data:audio/");
     });
 
     test("backend submission snapshot preserves prompt and namespaced options plus existing defaults", async () => {

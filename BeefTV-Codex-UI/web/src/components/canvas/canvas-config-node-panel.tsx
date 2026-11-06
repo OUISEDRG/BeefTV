@@ -68,7 +68,8 @@ const videoOperationOptions: Array<{ label: string; value: CanvasVideoEditOperat
     { label: "文生视频", value: "text_to_video" },
     { label: "图生视频", value: "image_to_video" },
     { label: "全模态参考", value: "reference_to_video" },
-    { label: "视频续写", value: "extend" },
+    { label: "视频延长", value: "extend" },
+    { label: "视频增强", value: "upscale" },
     { label: "局部修改", value: "inpaint" },
     { label: "元素替换", value: "replace_element" },
     { label: "运镜调整", value: "camera_motion" },
@@ -263,7 +264,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                             options={videoOperationOptions
                                 .filter(
                                     (option) =>
-                                        ["text_to_video", "image_to_video", "reference_to_video", "inpaint", "extend", "audio_to_video"].includes(option.value) && modelCapabilityConfigFor(config, config.model).video?.operations.includes(option.value),
+                                        ["text_to_video", "image_to_video", "reference_to_video", "inpaint", "extend", "upscale", "audio_to_video"].includes(option.value) && modelCapabilityConfigFor(config, config.model).video?.operations.includes(option.value),
                                 )
                                 .map((option) => ({
                                     ...option,
@@ -274,7 +275,7 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                                               inputSummary.imageCount + inputSummary.characterCount > 2 ||
                                               inputSummary.videoCount > 0 ||
                                               (!isH3Model(config.model) && inputSummary.audioCount > 0)
-                                            : ["inpaint", "extend"].includes(option.value)
+                                            : ["inpaint", "extend", "upscale"].includes(option.value)
                                               ? inputSummary.videoCount < 1
                                               : option.value === "text_to_video"
                                                 ? inputSummary.imageCount + inputSummary.characterCount + inputSummary.videoCount + inputSummary.audioCount > 0

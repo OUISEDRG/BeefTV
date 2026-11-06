@@ -1,4 +1,5 @@
 import { canvasNodeResourceId } from "@/lib/canvas/canvas-resource-id";
+import { reconcileCanvasImageVersionBatches } from "@/lib/canvas/canvas-image-version-batch";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
 export function liveImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeData[]) {
@@ -10,9 +11,9 @@ export function liveImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeDa
 export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
     const children = liveImageBatchChildren(root, nodes);
     if (!children.length) return { nodes, connections, removedIds: [] as string[] };
-    const removedIds = children.filter((node) => !node.metadata?.content).map((node) => node.id);
+    const removedIds = children.filter((node) => !node.metadata?.content && !node.metadata?.storageKey).map((node) => node.id);
     const removed = new Set(removedIds);
-    const kept = children.filter((node) => Boolean(node.metadata?.content));
+    const kept = children.filter((node) => Boolean(node.metadata?.content || node.metadata?.storageKey));
     const nextNodes = nodes
         .filter((node) => !removed.has(node.id))
         .map((node) => {
@@ -30,7 +31,7 @@ export function retireImageBatchChildren(root: CanvasNodeData, nodes: CanvasNode
             delete metadata.batchRootId;
             return {
                 ...node,
-                position: { x: root.position.x - node.width - 48, y: root.position.y + index * (node.height + 24) },
+                position: node.metadata?.mediaVersionOwnerId ? node.position : { x: root.position.x - node.width - 48, y: root.position.y + index * (node.height + 24) },
                 metadata,
             };
         });
@@ -109,6 +110,9 @@ export function markImageBatchRetrying(rootId: string, childIds: string[], nodes
                 ...(node.id === rootId ? { batchFailedCount: childIds.length } : {}),
                 errorDetails: undefined,
                 generationErrorCode: undefined,
+                generationErrorSummary: undefined,
+                generationProviderCode: undefined,
+                taskFailureDiagnostics: undefined,
                 taskOutcome: undefined,
                 failedPromptFingerprint: undefined,
                 failedInputFingerprint: undefined,
@@ -126,6 +130,9 @@ export function restoreUnsubmittedImageBatchChild(current: CanvasNodeData, origi
             status: "error",
             errorDetails: original.metadata?.errorDetails || "重试请求未提交",
             generationErrorCode: original.metadata?.generationErrorCode,
+            generationErrorSummary: original.metadata?.generationErrorSummary,
+            generationProviderCode: original.metadata?.generationProviderCode,
+            taskFailureDiagnostics: original.metadata?.taskFailureDiagnostics,
             taskOutcome: original.metadata?.taskOutcome,
             // A locally derived outcome stays local; it is not a backend receipt.
             taskOutcomeSource: original.metadata?.taskOutcomeSource,
@@ -138,6 +145,7 @@ export function restoreUnsubmittedImageBatchChild(current: CanvasNodeData, origi
 
 export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeData[]) {
     if (root.type !== CanvasNodeType.Image || !root.metadata?.isBatchRoot) return root;
+    if (root.metadata.imageBatchAsVersions) return reconcileCanvasImageVersionBatches(nodes).find(node => node.id === root.id) || root;
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const children = (root.metadata.batchChildIds || [])
         .map((id) => nodeById.get(id))

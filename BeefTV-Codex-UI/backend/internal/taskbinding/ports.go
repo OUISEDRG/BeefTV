@@ -36,6 +36,8 @@ type Request struct {
 	NodeID      string
 	OutputIndex int
 	EffectKey   string
+	// Optional persisted full-image result of an emotion/guide-mask composite.
+	CompositeAssetID string
 }
 
 // NodePatch is the generation-field overlay canvas applies onto an existing

@@ -41,6 +41,10 @@ test('bundled runtime, locked dependencies, and paths with spaces', () => {
     const result = spawnSync(bundled, ['-p', 'process.versions.node'], { encoding: 'utf8', env: { ...process.env, PATH: '' } });
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe(NODE_VERSION);
+    const compiler = spawnSync(bundled, [path.join(destination, 'dreama-canvas-compiler.mjs')],
+      { input: '{}', encoding: 'utf8', env: { ...process.env, PATH: '' } });
+    expect(compiler.status).toBe(1);
+    expect(JSON.parse(compiler.stdout).error.reason).toBe('generation_prepare_invalid');
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

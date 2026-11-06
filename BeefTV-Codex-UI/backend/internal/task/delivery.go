@@ -51,6 +51,8 @@ type TargetBinding struct {
 	MessageID      string `json:"messageId,omitempty"`
 	ConversationID string `json:"conversationId,omitempty"`
 	Source         string `json:"source,omitempty"`
+	// The image returned by the model is an intermediate input for the canvas compositor.
+	RequiresImageComposite bool `json:"-"`
 }
 
 func (b TargetBinding) Empty() bool {
@@ -149,6 +151,7 @@ func TargetBindingFromInput(inputJSON string) TargetBinding {
 	var input struct {
 		Metadata struct {
 			Source         string `json:"source"`
+			Edit           string `json:"edit"`
 			NodeID         string `json:"nodeId"`
 			ConversationID string `json:"conversationId"`
 			MessageID      string `json:"messageId"`
@@ -158,10 +161,11 @@ func TargetBindingFromInput(inputJSON string) TargetBinding {
 		return TargetBinding{}
 	}
 	return TargetBinding{
-		NodeID:         strings.TrimSpace(input.Metadata.NodeID),
-		MessageID:      strings.TrimSpace(input.Metadata.MessageID),
-		ConversationID: strings.TrimSpace(input.Metadata.ConversationID),
-		Source:         strings.TrimSpace(input.Metadata.Source),
+		NodeID:                 strings.TrimSpace(input.Metadata.NodeID),
+		MessageID:              strings.TrimSpace(input.Metadata.MessageID),
+		ConversationID:         strings.TrimSpace(input.Metadata.ConversationID),
+		Source:                 strings.TrimSpace(input.Metadata.Source),
+		RequiresImageComposite: input.Metadata.Edit == "emotion" || input.Metadata.Edit == "mask-guide",
 	}
 }
 

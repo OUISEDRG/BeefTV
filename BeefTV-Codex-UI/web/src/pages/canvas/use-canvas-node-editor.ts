@@ -26,7 +26,7 @@ type UseCanvasNodeEditorOptions = {
     nodesRef: { current: CanvasNodeData[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     /** 点开已关联项目素材的画框时，在画框右侧打开该文件夹。 */
-    openProjectAssets?: (initialCategory: string, position: Position | undefined, scope: "canvas" | "timeline", initialFolderId: string) => void;
+    openProjectAssets?: (initialCategory: string, position: Position | undefined, initialFolderId: string) => void;
 };
 
 export function useCanvasNodeEditor({
@@ -94,7 +94,7 @@ export function useCanvasNodeEditor({
         const node = nodesRef.current.find((item) => item.id === nodeId);
         const linkedFolderId = node?.metadata?.folder?.assetFolderId;
         if (linkedFolderId) {
-            openProjectAssets?.("all", node ? { x: node.position.x + node.width + 40, y: node.position.y } : undefined, "canvas", linkedFolderId);
+            openProjectAssets?.("all", node ? { x: node.position.x + node.width + 40, y: node.position.y } : undefined, linkedFolderId);
             return;
         }
         toggleFrameCollapsed(nodeId);

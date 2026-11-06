@@ -9,7 +9,6 @@ export type CanvasProjectDialogIds = {
     drawingNodeId: string | null;
     infoNodeId: string | null;
     subtitleNodeId: string | null;
-    timelineNodeId: string | null;
     previewNodeId: string | null;
     scriptEditorNodeId: string | null;
     artCritiqueNodeId: string | null;
@@ -56,7 +55,6 @@ export function useCanvasProjectDialogs(pageUi: CanvasPageUiStoreHook) {
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [subtitleNodeId, setSubtitleNodeId] = useState<string | null>(null);
-    const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
     const [artCritiqueNodeId, setArtCritiqueNodeId] = useState<string | null>(null);
@@ -146,8 +144,6 @@ export function useCanvasProjectDialogs(pageUi: CanvasPageUiStoreHook) {
         setInfoNodeId,
         subtitleNodeId,
         setSubtitleNodeId,
-        timelineNodeId,
-        setTimelineNodeId,
         previewNodeId,
         setPreviewNodeId,
         scriptEditorNodeId,

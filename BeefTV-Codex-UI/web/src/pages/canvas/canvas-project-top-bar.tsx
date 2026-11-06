@@ -15,6 +15,7 @@ type CanvasTopBarProps = {
     workspaceView: "workflow" | "storyboard";
     onWorkspaceViewChange: (view: "workflow" | "storyboard") => void;
     syncStatus?: ReactNode;
+    centerContent?: ReactNode;
     versionsOpen: boolean;
     onToggleVersions: () => void;
     onOpenWorkflows?: () => void;
@@ -63,6 +64,7 @@ export function CanvasTopBar({
     workspaceView,
     onWorkspaceViewChange,
     syncStatus,
+    centerContent,
     versionsOpen,
     onToggleVersions,
     onOpenWorkflows,
@@ -168,8 +170,8 @@ export function CanvasTopBar({
 
     return (
         <>
-            <div className="canvas-topbar pointer-events-none absolute inset-x-0 top-0 z-[var(--z-toolbar)] flex h-[var(--canvas-topbar-h)] items-center justify-between px-2 sm:px-2">
-                <div className="pointer-events-none flex items-center gap-2">
+            <div className="canvas-topbar pointer-events-none absolute inset-x-0 top-0 z-[var(--z-toolbar)] flex h-[var(--canvas-topbar-h)] items-center justify-between gap-2 px-2 sm:px-2">
+                <div className="pointer-events-none flex min-w-0 shrink-0 items-center gap-2">
                 <div className="canvas-topbar-cluster canvas-topbar-project-cluster pointer-events-auto flex min-w-0 items-center gap-2" style={dockStyle}>
                     <Dropdown
                             trigger={["click"]}
@@ -344,7 +346,9 @@ export function CanvasTopBar({
                     </div>
                 ) : null}
 
-                <div className="canvas-topbar-cluster canvas-topbar-local-cluster pointer-events-auto hidden items-center gap-1 lg:flex" style={dockStyle}>
+                {centerContent ? <div className="canvas-topbar-center pointer-events-auto flex min-w-0 flex-1 justify-center">{centerContent}</div> : null}
+
+                <div className="canvas-topbar-cluster canvas-topbar-local-cluster pointer-events-auto hidden shrink-0 items-center gap-1 lg:flex" style={dockStyle}>
                     {onOpenWorkflows ? <Button type="text" className="canvas-topbar-action canvas-topbar-workflow-button !h-9 !rounded-xl !px-2.5" style={{ color: theme.node.text, background: workflowsOpen ? theme.toolbar.activeBg : undefined }} aria-pressed={workflowsOpen} icon={<Workflow className="size-4" />} onClick={onOpenWorkflows}>工作流</Button> : null}
                     {onToggleAssistant ? (
                         <CanvasTopBarTooltip label="Agent（Ctrl/Cmd + J）">
@@ -364,7 +368,7 @@ export function CanvasTopBar({
                     {!libtvChrome ? <CanvasTopBarTooltip label="版本记录"><Button type="text" className="canvas-topbar-action !h-9 !w-9 !min-w-9 !rounded-xl !p-0" style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.activeBg : undefined }} icon={<History className="size-4" />} onClick={onToggleVersions} aria-label="版本记录" aria-pressed={versionsOpen} /></CanvasTopBarTooltip> : null}
                 </div>
 
-                <div className="canvas-topbar-cluster canvas-topbar-tools-cluster pointer-events-auto flex items-center gap-1.5 lg:hidden" style={dockStyle}>
+                <div className="canvas-topbar-cluster canvas-topbar-tools-cluster pointer-events-auto flex shrink-0 items-center gap-1.5 lg:hidden" style={dockStyle}>
                     {onOpenWorkflows ? <CanvasTopBarTooltip label="工作流"><Button type="text" className="canvas-topbar-action canvas-topbar-workflow-button !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text, background: workflowsOpen ? theme.toolbar.activeBg : undefined }} aria-pressed={workflowsOpen} icon={<Workflow className="size-4" />} aria-label="工作流" onClick={onOpenWorkflows} /></CanvasTopBarTooltip> : null}
                     <CanvasTopBarTooltip label="搜索画布节点">
                         <Button

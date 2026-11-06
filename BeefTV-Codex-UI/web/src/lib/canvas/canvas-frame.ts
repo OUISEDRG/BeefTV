@@ -37,10 +37,44 @@ export function getFrameChildIds(frameId: string, nodes: CanvasNodeData[]) {
     return new Set(getFrameChildren(frameId, nodes).map((node) => node.id));
 }
 
-export function getCollapsedParentFrame(node: CanvasNodeData, nodes: CanvasNodeData[]) {
-    if (!node.parentId) return null;
-    const frame = nodes.find((item) => item.id === node.parentId && isFrameNode(item));
-    return frame?.metadata?.frame?.collapsed ? frame : null;
+/** Container movement and copies include every nested member; layout still uses direct children. */
+export function getFrameDescendants(frameId: string, nodes: CanvasNodeData[]): CanvasNodeData[] {
+    const childrenById = new Map<string, CanvasNodeData[]>();
+    for (const node of nodes) {
+        if (!node.parentId) continue;
+        const children = childrenById.get(node.parentId) || [];
+        children.push(node);
+        childrenById.set(node.parentId, children);
+    }
+    const seen = new Set([frameId]);
+    const pending = [frameId];
+    for (let index = 0; index < pending.length; index++) {
+        for (const child of childrenById.get(pending[index]) || []) {
+            if (seen.has(child.id)) continue;
+            seen.add(child.id);
+            pending.push(child.id);
+        }
+    }
+    return nodes.filter(node => node.id !== frameId && seen.has(node.id));
+}
+
+export function getFrameDescendantIds(frameId: string, nodes: CanvasNodeData[]) {
+    return new Set(getFrameDescendants(frameId, nodes).map(node => node.id));
+}
+
+export function getCollapsedParentFrame(node: CanvasNodeData, nodes: CanvasNodeData[] | ReadonlyMap<string, CanvasNodeData>) {
+    const byId: ReadonlyMap<string, CanvasNodeData> = Array.isArray(nodes) ? new Map(nodes.map(item => [item.id, item])) : nodes;
+    const seen = new Set([node.id]);
+    let parentId = node.parentId;
+    let collapsed: CanvasNodeData | null = null;
+    while (parentId && !seen.has(parentId)) {
+        seen.add(parentId);
+        const parent = byId.get(parentId);
+        if (!parent || !isFrameNode(parent)) break;
+        if (parent.metadata?.frame?.collapsed) collapsed = parent;
+        parentId = parent.parentId;
+    }
+    return collapsed;
 }
 
 export function isNodeHiddenByCollapsedFrame(node: CanvasNodeData, nodes: CanvasNodeData[]) {
@@ -98,6 +132,8 @@ export function applyFrameDrop(nodes: CanvasNodeData[], draggedNodeIds: Set<stri
     const canContain = target?.metadata?.folder?.assetFolderId ? canLinkedFolderArchive : target && isCanvasFolderNode(target) ? canFolderContain : canFrameContain;
     const next = nodes.map((node) => {
         if (!draggedNodeIds.has(node.id)) return node;
+        // Frame drags move a container; their existing episode ownership is not a media drop.
+        if (isFrameNode(node)) return node;
         if (!frameId) return node.parentId ? { ...node, parentId: undefined } : node;
         return target && canContain(node) ? { ...node, parentId: frameId } : node;
     });

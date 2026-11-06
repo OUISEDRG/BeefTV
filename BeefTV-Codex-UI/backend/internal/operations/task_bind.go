@@ -14,19 +14,21 @@ import (
 
 func opCanvasTaskBind(ctx *Context, params json.RawMessage) (any, error) {
 	var args struct {
-		CanvasID    string `json:"canvasId"`
-		TaskID      string `json:"taskId"`
-		NodeID      string `json:"nodeId"`
-		OutputIndex int    `json:"outputIndex"`
+		CanvasID         string `json:"canvasId"`
+		TaskID           string `json:"taskId"`
+		NodeID           string `json:"nodeId"`
+		OutputIndex      int    `json:"outputIndex"`
+		CompositeAssetID string `json:"compositeAssetId"`
 	}
 	if err := decodeParams(params, &args); err != nil {
 		return nil, err
 	}
 	receipt, err := taskbinding.Bind(&bindPorts{ctx: ctx}, ctx.UserID, taskbinding.Request{
-		CanvasID:    args.CanvasID,
-		TaskID:      args.TaskID,
-		NodeID:      args.NodeID,
-		OutputIndex: args.OutputIndex,
+		CanvasID:         args.CanvasID,
+		TaskID:           args.TaskID,
+		NodeID:           args.NodeID,
+		OutputIndex:      args.OutputIndex,
+		CompositeAssetID: args.CompositeAssetID,
 	})
 	if err != nil {
 		mapped := mapDomainError(err)

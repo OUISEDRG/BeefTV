@@ -52,10 +52,11 @@ test("character preview reserves minimum capacity while resolved input uses actu
     expect(resolved.input).toMatchObject({ imageCount: 2, characterCount: 0 });
 });
 
-test("image preview uses canvas count and transparent background instead of unrelated global count", () => {
+test("image preview checks per-request count instead of the canvas total", () => {
     const global = { ...defaultConfig, count: "1", canvasImageCount: "4", transparentBackground: "true" };
     const imageNode = { ...node, type: CanvasNodeType.Image, metadata: { transparentBackground: "false" } };
-    expect(buildCanvasGenerationRequirements(global, imageNode, "image", input).options).toMatchObject({ count: 4, transparentBackground: false });
+    expect(buildCanvasGenerationRequirements(global, imageNode, "image", input).options).toMatchObject({ count: 1, transparentBackground: false });
+    expect(buildCanvasGenerationRequirements(global, { ...imageNode, metadata: { count: 3 } }, "image", input).options).toMatchObject({ count: 1 });
 });
 
 test("workflow requirements do not apply model-only request options", () => {
@@ -65,7 +66,7 @@ test("workflow requirements do not apply model-only request options", () => {
 test("resolved requirements retain admitted defaults rather than restoring raw node or canvas values", () => {
     const resolved = { ...defaultConfig, count: "2", canvasImageCount: "4", size: "3:2" };
     const imageNode = { ...node, type: CanvasNodeType.Image, metadata: { count: 9, size: "1:1" } };
-    expect(resolvedCanvasGenerationRequirements(resolved, imageNode, "image", input).options).toMatchObject({ count: 2, size: "3:2" });
+    expect(resolvedCanvasGenerationRequirements(resolved, imageNode, "image", input).options).toMatchObject({ count: 1, size: "3:2" });
 });
 
 for (const savedModel of [false, true]) {

@@ -11,10 +11,12 @@ import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-s
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 const mode = new URLSearchParams(location.search).get("mode") === "video" ? "video" : "image";
+const singleOutput = new URLSearchParams(location.search).has("single-output");
 const channel = createModelChannel({ id: "fixture", name: "Fixture", baseUrl: "https://example.invalid", apiKey: "fixture", models: [`${mode}-a`, `${mode}-b`] });
 channel.modelProfiles = channel.models.map((model) => {
     const capabilityConfig = defaultModelCapabilityConfig(mode === "image" ? "openai-image" : "openai-videos");
     capabilityConfig.image!.size = { parameter: "size", values: ["1:1", "16:9"], default: "1:1", allowCustom: false };
+    if (singleOutput) Object.assign(capabilityConfig.image!, { fixedOutputs: 1, maxOutputs: 1, generationOutputs: [1] });
     capabilityConfig.video!.ratios = model.endsWith("-a") ? ["16:9", "9:16"] : ["9:16"];
     capabilityConfig.video!.defaultRatio = "9:16";
     capabilityConfig.video!.duration = { selection: "enum", values: [5, 10], default: 5 };
@@ -23,7 +25,7 @@ channel.modelProfiles = channel.models.map((model) => {
 const config = { ...defaultConfig, channels: [channel], imageModel: "fixture::image-a", videoModel: "fixture::video-a" };
 useConfigStore.setState({ config, isAiConfigReady: true });
 useCreationPreferencesStore.setState({ preferences: { [mode]: { model: `fixture::${mode}-a`, ratio: "16:9" } } });
-const initial: CanvasNodeData = { id: "source", type: mode === "image" ? CanvasNodeType.Image : CanvasNodeType.Video, title: "Fixture", width: 500, height: 300, position: { x: 0, y: 0 }, metadata: { model: `fixture::${mode}-a`, size: "16:9", seconds: "10", count: 2, generateAudio: "false", watermark: "false", prompt: "Fixture prompt" } };
+const initial: CanvasNodeData = { id: "source", type: mode === "image" ? CanvasNodeType.Image : CanvasNodeType.Video, title: "Fixture", width: 500, height: 300, position: { x: 0, y: 0 }, metadata: { model: `fixture::${mode}-a`, size: "16:9", seconds: "10", count: singleOutput ? 1 : 2, generateAudio: "false", watermark: "false", prompt: "Fixture prompt" } };
 
 function Harness() {
     const [node, setNode] = useState(initial);

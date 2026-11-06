@@ -90,7 +90,15 @@ export function canOpenCanvasNodePromptPanel(node: CanvasNodeData | null | undef
 /** Adds durable semantics to legacy media nodes without mutating the loaded snapshot. */
 export function normalizeCanvasMediaNodeSemantics(node: CanvasNodeData): CanvasNodeData {
     if (!isCanvasMediaNode(node)) return node;
-    const metadata = normalizeAudioSetting(node.metadata || {});
+    let metadata = normalizeAudioSetting(node.metadata || {});
+    const emotion = metadata.emotionEdit;
+    // Older emotion nodes stored composite pixel dimensions in the model's size
+    // option. Restore only that exact value from the frozen provider option.
+    if (node.type === CanvasNodeType.Image && emotion?.providerSize?.trim() &&
+        (emotion.sourceWidth || 0) > 0 && (emotion.sourceHeight || 0) > 0 &&
+        metadata.size === `${emotion.sourceWidth}x${emotion.sourceHeight}` && metadata.size !== emotion.providerSize.trim()) {
+        metadata = { ...metadata, size: emotion.providerSize.trim() };
+    }
     const nodeRole = canvasMediaNodeRole(node);
     const resultOrigin = canvasMediaNodeOrigin(node);
     if (metadata === node.metadata && metadata.nodeRole === nodeRole && metadata.resultOrigin === resultOrigin) return node;

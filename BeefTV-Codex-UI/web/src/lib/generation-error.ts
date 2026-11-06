@@ -1,6 +1,7 @@
 import { isLocalRuntimeMode } from "@/lib/runtime-mode";
 import {
     allowlistedString,
+    CATEGORY_COPY,
     categoryFromHttpStatus,
     categoryFromProviderCode,
     categoryFromProviderMessage,
@@ -75,12 +76,15 @@ export type GenerationFailureMetadata = {
     generationErrorSummary?: string;
     errorDetails: string;
     generationErrorCode?: string;
+    generationProviderCode?: string;
+    taskFailureDiagnostics?: GenerationFailureDiagnostics;
     failedPromptFingerprint?: string;
     failedInputFingerprint?: string;
 };
 
 export type GenerationFailureContext = SupportDiagnosticContext & {
     errorSummary?: string;
+    providerCode?: string;
     failureDiagnostics?: GenerationFailureDiagnostics;
     completedAt?: string;
     updatedAt?: string;
@@ -129,10 +133,12 @@ export function explainGenerationError(error: unknown, context: GenerationFailur
     const uncertain = classified.uncertain || classified.category === "submission_uncertain" || classified.category === "download_failed" || (classified.category === "timeout" && classified.status === 524);
     const preparation = confirmedReferencePreparation(classified);
     const blockAutomaticRetry = uncertain || moderation || preparation || Object.hasOwn(REFERENCE_PREPARATION_COPY, classified.providerCode || "") || !["throttled", "concurrency", "provider_unavailable", "cancelled", "request_not_sent"].includes(classified.category);
+    const rawSummary = providerPayloadMessage(error instanceof Error ? error.message : error);
+    const sanitizedSummary = sanitizeProviderText(rawSummary);
     return {
         category: classified.category,
         httpStatus: classified.status,
-        summary: ["local_storage", "local_disk_full"].includes(classified.category) ? copy.reason : sanitizeProviderText(error instanceof Error ? error.message : typeof error === "string" ? error : providerPayloadMessage(error)),
+        summary: ["local_storage", "local_disk_full"].includes(classified.category) || Boolean(resourceStorageFailureMessage(rawSummary)) ? copy.reason : sanitizedSummary.includes("[已隐藏]") || sanitizedSummary.includes("[路径已隐藏]") || /[{}]/.test(sanitizedSummary) || /(?<![A-Za-z0-9._-])\/+(?!v\d+\/)[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+/.test(sanitizedSummary) ? "" : sanitizedSummary,
         reason: copy.reason,
         action: copy.action,
         message: message || DEFAULT_GENERATION_ERROR_MESSAGE,
@@ -164,10 +170,21 @@ export function generationErrorCode(error: unknown) {
 export function generationFailureMetadata(error: unknown, prompt: string, references: Array<string | { id?: string; storageKey?: string; url?: string }> = []): GenerationFailureMetadata {
     const explained = explainGenerationError(error);
     const inputFingerprint = generationInputFingerprint(prompt, references);
-    if (!explained.moderation) return { errorDetails: explained.message, generationErrorSummary: explained.summary, generationErrorCode: explained.category === "unknown" ? undefined : explained.errorCode };
+    if (!explained.moderation) {
+        return {
+            errorDetails: explained.message,
+            generationErrorSummary: explained.summary,
+            generationErrorCode: explained.category === "unknown" ? undefined : explained.errorCode,
+            generationProviderCode: explained.providerCode,
+            taskFailureDiagnostics: undefined,
+        };
+    }
     return {
         errorDetails: explained.message,
+        generationErrorSummary: undefined,
         generationErrorCode: explained.errorCode,
+        generationProviderCode: explained.providerCode,
+        taskFailureDiagnostics: undefined,
         failedPromptFingerprint: generationPromptFingerprint(prompt),
         failedInputFingerprint: inputFingerprint,
     };
@@ -233,6 +250,75 @@ export function generationInputFingerprint(prompt: string, references: Array<str
         .filter(Boolean)
         .sort();
     return generationPromptFingerprint(`${prompt.trim()}\n${referenceKeys.join("\n")}`);
+}
+
+const LOCAL_ONLY_FAILURE_CATEGORIES: ReadonlySet<GenerationErrorCategory> = new Set([
+    "local_storage",
+    "local_disk_full",
+    "local_credential",
+    "canvas_conflict",
+    "result_apply_failed",
+    "result_target_unavailable",
+    "request_not_sent",
+    "cancelled",
+]);
+
+const LOCAL_DIAGNOSTIC_SOURCES: ReadonlySet<string> = new Set(["local_validation", "local_network", "local_result", "local_response", "reference_upload", "client_result"]);
+
+function normalizeComparableText(value: string) {
+    return value.replace(/[\s,，。.;；:：!！?？、·"'“”‘’「」『』（）()[\]【】]+/gu, "").toLowerCase();
+}
+
+function cleanUpstreamCandidate(raw: string | undefined, explanation: GenerationFailureExplanation): string {
+    if (!raw || resourceStorageFailureMessage(raw) || /<\/?[a-z!][^>]*>/i.test(raw)) return "";
+    const sanitized = sanitizeProviderText(providerPayloadMessage(raw));
+    if (sanitized.includes("[已隐藏]") || sanitized.includes("[路径已隐藏]") || /[{}]/.test(sanitized) || /(?<![A-Za-z0-9._-])\/+(?!v\d+\/)[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+/.test(sanitized)) return "";
+    const cleaned = sanitized
+        .replace(/\{\s*\[已隐藏\]/g, "")
+        .replace(/\[已隐藏\]/g, "")
+        .replace(/\s*\(request\s*id:\s*[A-Za-z0-9._:-]{6,127}\)\s*$/i, "")
+        .replace(/(?:[。.\s]*排查编号：[^。]+)。?$/u, "")
+        .replace(/[:：,，\s[[{}]+$/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!cleaned || /[{}]/.test(cleaned)) return "";
+    if (/^(?:opaque(?:\s+(?:provider\s+)?(?:message|failure|error))?|bad\s+request|failure|任务失败|已停止)$/i.test(cleaned)) return "";
+    if (/^(?:模型服务|接口)?请求失败(?:[（(]\s*HTTP\s*\d{3}\s*[)）])?$/i.test(cleaned)) return "";
+    if (BACKEND_FAILURE_CATEGORIES.has(cleaned.toLowerCase())) return "";
+    if (isNetworkText(cleaned) || isMalformedText(cleaned) || isCancelledText(cleaned) || isDownloadText(cleaned) || isResultsMissingText(cleaned) || containsInfrastructureDetails(cleaned)) return "";
+    const normalized = normalizeComparableText(cleaned);
+    if (!normalized) return "";
+    const reason = normalizeComparableText(explanation.reason);
+    const action = normalizeComparableText(explanation.action);
+    const combined = normalizeComparableText(`${explanation.reason}${explanation.action}`);
+    if (normalized === reason || normalized === action || normalized === combined) return "";
+    if (reason && normalized.startsWith(reason) && (!action || normalized.includes(action))) return "";
+    for (const copy of [LOCAL_TASK_ADMISSION_FAILURE, ...Object.values(CATEGORY_COPY), ...Object.values(REFERENCE_PREPARATION_COPY)]) {
+        if (normalized === normalizeComparableText(copy.reason) || normalized === normalizeComparableText(`${copy.reason}${copy.action}`)) return "";
+    }
+    return cleaned;
+}
+
+export function formatUpstreamFailureDetail(explanation: GenerationFailureExplanation, context: GenerationFailureContext = {}): string {
+    if (LOCAL_ONLY_FAILURE_CATEGORIES.has(explanation.category)) return "";
+    const evidence = context.failureDiagnostics;
+    if (evidence?.source && LOCAL_DIAGNOSTIC_SOURCES.has(evidence.source)) return "";
+    const upstreamEvidence = evidence && ["upstream_http", "upstream_response"].includes(evidence.source);
+    if (!upstreamEvidence && explanation.category === "unknown" && !explanation.httpStatus && !explanation.providerCode && !context.providerCode) return "";
+    const detail = [upstreamEvidence ? evidence?.summary : "", context.errorSummary, explanation.summary]
+        .map((candidate) => cleanUpstreamCandidate(candidate, explanation))
+        .find(Boolean);
+    if (!detail) return "";
+    const rawCode = sanitizeProviderCode((upstreamEvidence ? evidence?.providerCode : "") || explanation.providerCode || context.providerCode || "");
+    const showCode = Boolean(
+        rawCode &&
+            !/^\d+$/.test(rawCode) &&
+            !BACKEND_FAILURE_CATEGORIES.has(rawCode.toLowerCase()) &&
+            !Object.hasOwn(REFERENCE_PREPARATION_COPY, rawCode) &&
+            !isGenericProviderCode(rawCode) &&
+            !detail.toLowerCase().includes(rawCode.toLowerCase()),
+    );
+    return `上游返回：${detail}${showCode ? ` (${rawCode})` : ""}`;
 }
 
 export function formatGenerationDiagnostics(explanation: GenerationFailureExplanation, context: GenerationFailureContext = {}) {
@@ -400,10 +486,10 @@ function classifyHttp(status: number | undefined, body: unknown): Classified {
         classified = { ...classified, category: "quota_user", fromCode: true, reason: undefined, action: undefined };
     }
     if (classified.category !== "unknown" && !classified.fromCode && !trustProviderMessageStatus(status)) {
-        classified = { category: "unknown", retryable: false };
+        classified = { ...classified, category: "unknown", reason: undefined, action: undefined, retryable: false };
     }
-    if (!classified.fromCode && (classified.category === "unknown" || classified.category === "malformed_response") && status) {
-        classified = { category: categoryFromHttpStatus(status), status, retryable: false };
+    if (!classified.fromCode && (classified.category === "unknown" || classified.category === "malformed_response" || (classified.category === "invalid_params" && status && status !== 400 && status !== 422 && status !== 409)) && status) {
+        classified = { ...classified, category: categoryFromHttpStatus(status), reason: undefined, action: undefined, status, retryable: false };
         if (status === 524) {
             classified.category = "timeout";
             classified.uncertain = true;
@@ -441,6 +527,7 @@ function classifyText(raw: string): Classified {
         return {
             category: "invalid_params",
             ...durationCopy,
+            fromCode: true,
             requestId: sanitizeDebugId(debug.match(/(?:^| · )请求 ([A-Za-z0-9._:-]{6,127})$/)?.[1]),
             taskId: sanitizeDebugId(debug.match(/^任务 ([A-Za-z0-9._:-]{6,127})(?: · |$)/)?.[1]),
             retryable: false,
@@ -452,6 +539,7 @@ function classifyText(raw: string): Classified {
         return {
             category: mediaCopy.reason.includes("过大") ? "input_too_large" : "invalid_params",
             ...mediaCopy,
+            fromCode: true,
             requestId: sanitizeDebugId(debug.match(/(?:^| · )请求 ([A-Za-z0-9._:-]{6,127})$/)?.[1]),
             taskId: sanitizeDebugId(debug.match(/^任务 ([A-Za-z0-9._:-]{6,127})(?: · |$)/)?.[1]),
             retryable: false,
@@ -471,7 +559,21 @@ function classifyText(raw: string): Classified {
     if (LOCAL_DATABASE_ERROR.test(databaseMessage)) return { category: "local_storage", fromCode: true, requestId: sanitizeDebugId(fields.requestId), taskId: sanitizeDebugId(fields.taskId), retryable: false };
     if (fields.code || fields.type || fields.message || fields.status) {
         const fromCode = categoryFromProviderCode(fields.code, fields.type, fields.status);
-        if (fromCode) return specialize({ category: fromCode, fromCode: true, providerCode: sanitizeProviderCode(fields.code), requestId: sanitizeDebugId(fields.requestId), taskId: sanitizeDebugId(fields.taskId) }, fields);
+        const codeOrStatusKnown = Boolean(categoryFromProviderCode(fields.code, fields.status));
+        if (fromCode) {
+            const specialized = specialize(
+                {
+                    category: fromCode,
+                    fromCode: codeOrStatusKnown || !isGenericProviderCode(fields.type),
+                    providerCode: sanitizeProviderCode(fields.code),
+                    requestId: sanitizeDebugId(fields.requestId),
+                    taskId: sanitizeDebugId(fields.taskId),
+                },
+                fields,
+            );
+            if (specialized.category !== "invalid_params" || specialized.reason) specialized.fromCode = true;
+            return specialized;
+        }
         const fromMessage = categoryFromProviderMessage(`${fields.message} ${fields.type} ${fields.status}`);
         if (fromMessage) return specialize({ category: fromMessage, providerCode: sanitizeProviderCode(fields.code), requestId: sanitizeDebugId(fields.requestId), taskId: sanitizeDebugId(fields.taskId) }, fields);
     }
@@ -489,25 +591,41 @@ function classifyText(raw: string): Classified {
     return { category: "unknown", retryable: false };
 }
 
+function isGenericProviderCode(code: string) {
+    return (
+        ["", "unknown", "failed", "badrequest", "api_error", "upstream_error", "upstream_rejected", "invalid_request", "invalid_request_error", "invalid_parameter", "invalidparameter", "invalid_argument"].includes(normalizeCode(code)) ||
+        /^\d{3}$/.test(code.trim())
+    );
+}
+
+function hasAuthoritativeProviderCode(fields: ExtractedFields) {
+    return (
+        (Boolean(categoryFromProviderCode(fields.code)) && !isGenericProviderCode(fields.code)) ||
+        (Boolean(categoryFromProviderCode(fields.status)) && !isGenericProviderCode(fields.status)) ||
+        (Boolean(categoryFromProviderCode(fields.type)) && !isGenericProviderCode(fields.type))
+    );
+}
+
 function specialize(classified: Classified, fields: ExtractedFields): Classified {
     fields = { ...fields, message: sanitizeProviderText(fields.message) };
-    classified.requestId ||= sanitizeDebugId(fields.message.match(/\brequest\s*id:\s*([A-Za-z0-9_-]{6,127})\b/i)?.[1]);
-    // Only broad wrappers may be refined by a more specific provider message.
-    const genericCode =
-        ["", "unknown", "failed", "badrequest", "api_error", "upstream_error", "upstream_rejected", "invalid_request", "invalid_request_error", "invalid_parameter", "invalidparameter", "invalid_argument"].includes(normalizeCode(fields.code)) ||
-        /^\d{3}$/.test(fields.code);
+    classified.requestId ||= sanitizeDebugId(fields.message.match(/\brequest\s*id:\s*([A-Za-z0-9._:-]{6,127})\b/i)?.[1]);
+    // Only broad wrappers (or unrecognized codes paired with a generic type) may be refined by a more specific provider message.
+    const genericCode = !hasAuthoritativeProviderCode(fields);
     if (genericCode && ["unknown", "invalid_params"].includes(classified.category)) {
         const refined = categoryFromProviderMessage(fields.message);
-        if (refined) classified.category = refined;
+        if (refined) {
+            classified.category = refined;
+            if (refined !== "invalid_params") classified.fromCode = true;
+        }
     }
     if (isModerationCategory(classified.category) || (genericCode && ["unknown", "invalid_params"].includes(classified.category))) {
         const moderationCopy = moderationErrorCopy(fields.code, fields.message);
-        if (moderationCopy) return { ...classified, ...moderationCopy, retryable: false };
+        if (moderationCopy) return { ...classified, ...moderationCopy, fromCode: true, retryable: false };
     }
     const audioOrDuration = referenceAudioCopy(fields.message, normalizeCode(fields.code) === "invalid_reference_audio") || referenceDurationCopy(fields.message);
-    if (audioOrDuration) return { ...classified, category: "invalid_params", ...audioOrDuration, retryable: false };
+    if (audioOrDuration) return { ...classified, category: "invalid_params", ...audioOrDuration, fromCode: true, retryable: false };
     const mediaCopy = ["unknown", "invalid_params", "input_too_large", "input_inaccessible"].includes(classified.category) ? referenceMediaConstraintCopy(fields.message) : undefined;
-    if (mediaCopy) return { ...classified, category: mediaCopy.reason.includes("过大") ? "input_too_large" : "invalid_params", ...mediaCopy, retryable: false };
+    if (mediaCopy) return { ...classified, category: mediaCopy.reason.includes("过大") ? "input_too_large" : "invalid_params", ...mediaCopy, fromCode: true, retryable: false };
     if (classified.category === "invalid_params") {
         const refined = categoryFromProviderMessage(fields.message);
         if (refined === "context_too_long" || refined === "input_inaccessible" || refined === "input_too_large" || refined === "model_missing") classified.category = refined;
@@ -559,6 +677,7 @@ function specialize(classified: Classified, fields: ExtractedFields): Classified
         classified.reason = "当前模型为思考或推理模式，不支持强制工具调用";
         classified.action = "请改用自动工具选择或更换非思考模式模型";
     }
+    if (classified.reason) classified.fromCode = true;
     classified.retryable = retryableCategory(classified.category);
     return classified;
 }

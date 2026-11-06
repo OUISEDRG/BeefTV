@@ -79,6 +79,26 @@ func TestBindMediaUsesDurableOutputNotClientURL(t *testing.T) {
 	}
 }
 
+func TestLocalImageEditWaitsForCanvasComposite(t *testing.T) {
+	for _, edit := range []string{"emotion", "mask-guide", "mask"} {
+		t.Run(edit, func(t *testing.T) {
+			task := testImageTask()
+			task.InputJSON = `{"metadata":{"nodeId":"node-1","edit":"` + edit + `"}}`
+			ports := &fakePorts{task: task}
+			intents := []localtask.CanvasBindingIntent{{TargetBinding: &localtask.TargetBinding{NodeID: "node-1"}}}
+			targets := localtask.CanvasBindTargets(*task, intents)
+			_, err := Bind(ports, "user-1", Request{CanvasID: "canvas-1", TaskID: task.ID, NodeID: "node-1"})
+			if edit == "mask" {
+				if len(targets) != 1 || !isBindReason(err, "output_not_ready") {
+					t.Fatalf("native mask should follow normal output delivery: targets=%v, err=%v", targets, err)
+				}
+			} else if len(targets) != 0 || !isBindReason(err, "local_image_composite_required") || ports.binds != 0 {
+				t.Fatalf("raw model output must wait for compositing: targets=%v, err=%v, binds=%d", targets, err, ports.binds)
+			}
+		})
+	}
+}
+
 func TestBindTextUsesDurableResultJSON(t *testing.T) {
 	ports := &fakePorts{
 		task: &model.Task{

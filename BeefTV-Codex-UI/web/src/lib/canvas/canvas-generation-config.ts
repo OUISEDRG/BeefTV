@@ -4,7 +4,8 @@ import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-ge
 import { isH3Model, h3VideoOperation } from "@/lib/h3-video";
 import { seedancePortraitModel } from "@/lib/seedance-portrait";
 import { workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
-import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoBooleanOptions, type ModelGenerationDefaults, type ModelInputSummary, type ModelRequirements } from "@/lib/model-selection";
+import { mergedImageCapabilityConfig, modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoBooleanOptions, type ModelGenerationDefaults, type ModelInputSummary, type ModelRequirements } from "@/lib/model-selection";
+import { resolveCanvasImageGenerationCount } from "@/lib/canvas/canvas-image-generation-count";
 import { mediaGeneratorMetadata } from "@/lib/canvas/canvas-node-semantics";
 import { resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
@@ -17,7 +18,7 @@ export function buildCanvasGenerationRequirements(config: AiConfig, node: Canvas
         ...config,
         size: node?.metadata?.size ?? config.size,
         quality: node?.metadata?.quality ?? config.quality,
-        count: String(node?.metadata?.count ?? (mode === "image" ? config.canvasImageCount || config.count : config.count)),
+        count: String(node?.metadata?.count ?? (mode === "image" ? 1 : config.count)),
         transparentBackground: node?.metadata?.transparentBackground ?? config.transparentBackground,
         videoSeconds: node?.metadata?.seconds ?? config.videoSeconds,
         vquality: node?.metadata?.vquality ?? config.vquality,
@@ -40,8 +41,15 @@ export function resolvedCanvasGenerationRequirements(config: AiConfig, node: Can
         input,
         videoOperation: node?.metadata?.videoEditOperation,
         videoSeconds: mode === "video" ? config.videoSeconds : undefined,
-        options: config.taskWorkflowProvider === "runninghub" ? undefined : modelRequestOptions(config, mode),
+        options: config.taskWorkflowProvider === "runninghub" ? undefined : canvasModelRequestOptions(config, mode),
     };
+}
+
+export function canvasModelRequestOptions(config: AiConfig, mode: CanvasGenerationMode) {
+    const options = modelRequestOptions(config, mode);
+    // A canvas count is a total across tasks. Model admission checks the count
+    // each submitted task will carry, including native multi-output batches.
+    return mode === "image" ? { ...options, count: mergedImageCapabilityConfig(config, config.model || config.imageModel).fixedOutputs || 1 } : options;
 }
 
 export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefined, mode: CanvasGenerationMode, requirements?: ModelRequirements): AiConfig {
@@ -97,12 +105,12 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
             audioVolume: node?.metadata?.audioVolume ?? audioFallback.audioVolume,
             audioInstructions: node?.metadata?.audioInstructions ?? audioFallback.audioInstructions,
         }),
-        count: String(node?.metadata?.count ?? (mode === "image" ? config.canvasImageCount || config.count || defaultConfig.count : config.count || defaultConfig.count)),
+        count: String(node?.metadata?.count ?? (mode === "image" ? 1 : config.count || defaultConfig.count)),
     };
     const imageSize = mode === "image" ? requestedConfig.size : undefined;
     // 无 requirements 的调用（重试、媒体工具等）也按当前能力与尺寸路由到组内最低价兼容模型，
     // 避免旧 metadata.model 不支持当前尺寸导致生成时被 normalize 回退。
-    const liveOptions = modelRequestOptions(requestedConfig, mode);
+    const liveOptions = canvasModelRequestOptions({ ...requestedConfig, model: preferredModel }, mode);
     const baseRequirements = requirements?.capability ? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } } : { capability: mode, options: liveOptions };
     if (mode === "video" && isH3Model(preferredModel) && requirements?.input) baseRequirements.videoOperation = h3VideoOperation(preferredModel, requirements.input, node?.metadata?.videoEditOperation);
     const model = workflowProvider === "model" ? resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel : preferredModel;
@@ -169,7 +177,9 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         videoWatermark: generationDefaults.videoWatermark || requestedConfig.videoWatermark,
         videoDraft: requestedConfig.videoDraft,
         videoArkPrivateAssetUpload: requestedConfig.videoArkPrivateAssetUpload,
-        count: generationDefaults.count || requestedConfig.count,
+        count: mode === "image" && workflowProvider === "model"
+            ? String(resolveCanvasImageGenerationCount(mergedImageCapabilityConfig(config, model), requestedConfig.count))
+            : generationDefaults.count || requestedConfig.count,
     };
 }
 
@@ -199,7 +209,7 @@ export function preferredMediaGeneratorMetadata(
         const requested = {
             size: overrides.size ?? prefs.image.ratio,
             quality: overrides.quality ?? prefs.image.quality,
-            count: overrides.count === undefined ? prefs.image.count : String(overrides.count),
+            count: String(overrides.count ?? 1),
             transparentBackground: overrides.transparentBackground ?? prefs.image.transparentBackground,
         };
         const model = resolveCompatibleModel(config, preferredModel, {
@@ -213,7 +223,7 @@ export function preferredMediaGeneratorMetadata(
             ...((prefs.image.model || model !== preferredModel) && model ? { model } : {}),
             ...(prefs.image.ratio && normalized.size ? { size: normalized.size } : {}),
             ...(prefs.image.quality && normalized.quality ? { quality: normalized.quality } : {}),
-            ...(prefs.image.count && normalized.count ? { count: Number(normalized.count) || 1 } : {}),
+            count: 1,
             ...(prefs.image.transparentBackground && normalized.transparentBackground ? { transparentBackground: normalized.transparentBackground } : {}),
             ...overrides,
         });
@@ -250,7 +260,7 @@ export function preferredMediaGeneratorMetadata(
             ...overrides,
         });
     }
-    return mediaGeneratorMetadata({ generationMode: mode, ...overrides });
+    return mediaGeneratorMetadata({ generationMode: mode, ...(mode === "image" ? { count: 1 } : {}), ...overrides });
 }
 
 function applyWorkflowParameterValues(fields: WorkflowFieldMapping[] | undefined, values: Record<string, unknown>) {

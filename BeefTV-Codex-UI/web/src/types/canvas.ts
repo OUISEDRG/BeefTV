@@ -70,7 +70,7 @@ export type CanvasGenerationBatchStatus = "queued" | "running" | "partial_failed
 export type CanvasGenerationBatchItemStatus = "waiting" | "submitting" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type CanvasImageGenerationType = "generation" | "edit";
 export type CanvasWorkflowKind = "free" | "script" | "story_input" | "character" | "scene" | "storyboard" | "shot" | "final" | "styleboard" | "reference_set" | "reference_video" | "action_board" | "video_retake";
-export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "reference_to_video" | "extend" | "inpaint" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat" | "draft_to_final";
+export type CanvasVideoEditOperation = "text_to_video" | "image_to_video" | "reference_to_video" | "extend" | "inpaint" | "upscale" | "replace_element" | "camera_motion" | "style_transfer" | "audio_to_video" | "compare_versions" | "concat" | "draft_to_final";
 export type CanvasSkillCategory = "writing" | "storyboard" | "image" | "video" | "utility";
 export type CanvasSkillOutputMode = "text" | "json" | "image_prompt" | "workflow";
 export type StoryboardColumn =
@@ -305,6 +305,8 @@ export type CanvasNodeMetadata = {
     naturalHeight?: number;
     freeResize?: boolean;
     isBatchRoot?: boolean;
+    /** Image batch outputs appear in this node's history rather than on the canvas. */
+    imageBatchAsVersions?: boolean;
     batchRootId?: string;
     batchChildIds?: string[];
     /** Original output targets for this generation; independent of the editable batch layout. */
@@ -390,6 +392,7 @@ export type CanvasNodeMetadata = {
     taskDurationMs?: number;
     taskErrorCode?: string;
     generationErrorSummary?: string;
+    generationProviderCode?: string;
     taskFailureDiagnostics?: import("@/lib/generation-error").GenerationFailureDiagnostics;
     taskProviderRequestId?: string;
     taskOfficialStatus?: "pending" | "processing" | "completed" | "failed" | "cancelled";
@@ -463,6 +466,9 @@ export type CanvasNodeMetadata = {
     versionOfNodeId?: string;
     versionLabel?: string;
     versionPrimary?: boolean;
+    /** Hidden media snapshot owned by a stable canvas node. */
+    mediaVersionOwnerId?: string;
+    mediaVersionSelected?: boolean;
     copiedFromNodeId?: string;
     generationResultPlacement?: "replace-node" | "new-version";
     directorSceneId?: string;
@@ -525,6 +531,7 @@ export type CanvasNodeMetadata = {
     drawingPreviewUrl?: string;
     drawingShapeCount?: number;
     drawingPageCount?: number;
+    maskEdit?: { sourceNodeId: string; maskStorageKey: string; useGuide: boolean };
     emotionEdit?: {
         sourceNodeId: string;
         characterName: string;

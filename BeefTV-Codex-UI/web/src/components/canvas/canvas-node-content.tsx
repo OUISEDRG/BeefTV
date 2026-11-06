@@ -4,6 +4,7 @@ import { AlertCircle, BookOpenCheck, Download, Image as ImageIcon, LoaderCircle,
 import { VideoPlayer } from "@/components/video-player";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { usesCanvasCustomNodeContent } from "@/lib/canvas/canvas-node-content-policy";
+import { hasCanvasMediaSource } from "@/lib/canvas/canvas-media-source";
 import { GenerationFailureNotice } from "@/components/generation/generation-failure-notice";
 import { explainGenerationError } from "@/lib/generation-error";
 import { canRecoverOrRetryDepthCapture } from "@/lib/canvas/canvas-depth-capture";
@@ -11,8 +12,9 @@ import { canvasNodeFailureView } from "@/lib/canvas/canvas-node-failure-view";
 import { canvasNodeOperation } from "@/lib/operation-progress";
 import { useOperationProgress } from "@/stores/use-operation-progress";
 import { canvasRichTextHTML } from "@/lib/canvas/canvas-rich-text";
-import { fitImageNodeToDecodedSize, fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeToDecodedSize, fitVideoNodeToDecodedSize, fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { loadCanvasDrawingPreview } from "@/lib/canvas/canvas-drawing-storage";
+import { prewarmCanvasLodThumbnails } from "@/lib/canvas/canvas-lod-thumbnails";
 import { canvasNodeVideoPreviewUrl, inferVideoHasAudio } from "@/lib/canvas/canvas-media-preview";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
 import { canvasVideoPresentationState } from "@/lib/canvas/canvas-video-presentation";
@@ -219,7 +221,7 @@ function ErrorContent({ node, theme, onRetry, onReloadResource, onOpenTaskDetail
                     compact
                     summaryOnly={batchChild}
                     explanation={explanation}
-                    context={{ ...canvasNodeDiagnosticContext(node), model: node.metadata?.model, createdAt: node.metadata?.taskCreatedAt, stage: node.metadata?.taskStage, providerRequestId: node.metadata?.taskProviderRequestId, failureDiagnostics: node.metadata?.taskFailureDiagnostics, errorSummary: node.metadata?.generationErrorSummary, completedAt: node.metadata?.taskCompletedAt, updatedAt: node.metadata?.taskUpdatedAt }}
+                    context={{ ...canvasNodeDiagnosticContext(node), model: node.metadata?.model, createdAt: node.metadata?.taskCreatedAt, stage: node.metadata?.taskStage, providerRequestId: node.metadata?.taskProviderRequestId, failureDiagnostics: node.metadata?.taskFailureDiagnostics, errorSummary: node.metadata?.generationErrorSummary, providerCode: node.metadata?.generationProviderCode, completedAt: node.metadata?.taskCompletedAt, updatedAt: node.metadata?.taskUpdatedAt }}
                     onOpenDetails={node.metadata?.taskId && onOpenTaskDetails ? () => onOpenTaskDetails(node) : undefined}
                     retryDisabled={retryBlocked}
                     onRetry={retryBlocked ? undefined : onRetry ? () => onRetry(node) : undefined}
@@ -350,7 +352,8 @@ function skillOutputModeLabel(mode?: string) {
 }
 
 function ImageNodeContent(props: CanvasNodeContentProps) {
-    if (!props.node.metadata?.content && props.isBatchRoot) {
+    const hasSource = hasCanvasMediaSource(props.node);
+    if (!hasSource && props.isBatchRoot) {
         const content = props.node.metadata?.status === "loading"
             ? <CanvasNodeGenerationProgress node={props.node} theme={props.theme} />
             : props.node.metadata?.status === "error"
@@ -358,7 +361,7 @@ function ImageNodeContent(props: CanvasNodeContentProps) {
                 : <EmptyImageContent {...props} isBatchRoot={false} />;
         return <BatchFrame batchPreviewNodes={props.batchPreviewNodes} batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} theme={props.theme} onToggleBatch={props.onToggleBatch}>{content}</BatchFrame>;
     }
-    if (!props.node.metadata?.content) return <EmptyImageContent {...props} />;
+    if (!hasSource) return <EmptyImageContent {...props} />;
     return <ImageContent scale={props.scale} batchPreviewNodes={props.batchPreviewNodes} node={props.node} theme={props.theme} isBatchRoot={props.isBatchRoot} batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch} />;
 }
 
@@ -411,6 +414,11 @@ function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest
     useEffect(() => { if (mediaActive && error) recordCanvasVideoDiagnostic(node, "source_failed"); }, [mediaActive, error, node.id]);
 
     useEffect(() => {
+        const { naturalWidth, naturalHeight } = node.metadata || {};
+        if (naturalWidth && naturalHeight) updateMediaNode?.(node.id, current => fitVideoNodeToDecodedSize(current, naturalWidth, naturalHeight));
+    }, [node.id, node.width, node.height, node.metadata?.naturalWidth, node.metadata?.naturalHeight, updateMediaNode]);
+
+    useEffect(() => {
         const box = playerBoxRef.current;
         const video = box?.querySelector("video");
         if (!video) return;
@@ -418,8 +426,8 @@ function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest
             if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
             recordCanvasVideoDiagnostic(node, "metadata_loaded", video);
             setVideoSize({ width: video.videoWidth, height: video.videoHeight });
-            if (!compatible && (node.metadata?.naturalWidth !== video.videoWidth || node.metadata?.naturalHeight !== video.videoHeight)) {
-                updateMediaNode?.(node.id, (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: video.videoWidth, naturalHeight: video.videoHeight } }));
+            if (!compatible) {
+                updateMediaNode?.(node.id, current => fitVideoNodeToDecodedSize(current, video.videoWidth, video.videoHeight));
             }
         };
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
@@ -433,7 +441,7 @@ function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest
         };
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url, compatible]);
 
-    if (!node.metadata?.content) return <EmptyVideoContent theme={theme} />;
+    if (!hasCanvasMediaSource(node)) return <EmptyVideoContent theme={theme} />;
 
     const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
     const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));
@@ -509,7 +517,7 @@ function ToggleLine({ label, value, onChange }: { label: string; value: boolean;
 }
 
 function AudioNodeContent({ node, theme }: CanvasNodeContentProps) {
-    if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyAudioContent theme={theme} />;
+    if (!hasCanvasMediaSource(node)) return <EmptyAudioContent theme={theme} />;
     return <CanvasAudioPlayer node={node} theme={theme} />;
 }
 
@@ -544,7 +552,10 @@ export function InactiveVideoPreview({ node, theme, onPlay, hoverEnabled = true,
         setHydrating(true);
         void lease.promise
             .then((videoPreview) => {
-                if (active && videoPreview) setDerivedPreview({ sourceKey, content: videoPreview.content });
+                if (active && videoPreview) {
+                    setDerivedPreview({ sourceKey, content: videoPreview.content });
+                    prewarmCanvasLodThumbnails([node]);
+                }
             })
             .catch(() => undefined)
             .finally(() => {
@@ -656,7 +667,7 @@ function ImageContent({ node, theme, scale = 1, isBatchRoot, batchCount, batchPr
 }
 
 function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, previewSize?: number) {
-    const storageKey = node.metadata?.storageKey || "";
+    const storageKey = node.metadata?.storageKey?.trim() || "";
     const rawContent = node.metadata?.content || "";
     const content = node.type === CanvasNodeType.Video && node.metadata?.importSource?.provider === "libtv"
         ? buildLibTVVideoSourceUrl(rawContent)
@@ -672,7 +683,7 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, previewSize?: 
     const isRemoteResource = Boolean(resourceId);
     // 远程资源接口受登录/桌面令牌保护，原生 `<img>` 无法附带该令牌。
     // 重登后只能先通过 cacheResourceObjectUrl() 走鉴权下载，再挂载 Blob URL。
-    const synchronousUrl = !previewSize && eager && isRemoteResource && node.type === CanvasNodeType.Image ? peekCachedResourceObjectUrl(storageKey) : "";
+    const synchronousUrl = eager && isRemoteResource && node.type === CanvasNodeType.Image ? peekCachedResourceObjectUrl(storageKey, previewSize) : "";
     // Inline data URLs are already local, but decoding thousands of them is
     // still expensive. Images must wait for the same viewport gate as remote
     // resources; otherwise DOM virtualization does not reduce image work.
@@ -731,7 +742,7 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, previewSize?: 
         }
         const reload = reloadRequested.current;
         reloadRequested.current = false;
-        const cachedSync = reload || previewSize ? "" : peekCachedResourceObjectUrl(storageKey);
+        const cachedSync = reload || !eager ? "" : peekCachedResourceObjectUrl(storageKey, previewSize);
         if (cachedSync) {
             setUrl(cachedSync);
             setLoading(false);
@@ -769,14 +780,33 @@ function useNearViewport(ref: RefObject<Element | null>) {
             setNearViewport(true);
             return;
         }
+        let zoomWaitTimer: ReturnType<typeof setTimeout> | null = null;
         const observer = new IntersectionObserver((entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) {
-                setNearViewport(true);
-                observer.disconnect();
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            if (element.closest('[data-canvas-viewport-zooming="true"]')) {
+                if (!zoomWaitTimer) {
+                    const retryWhenZoomIdle = () => {
+                        zoomWaitTimer = null;
+                        if (!element.isConnected) return;
+                        if (element.closest('[data-canvas-viewport-zooming="true"]')) {
+                            zoomWaitTimer = setTimeout(retryWhenZoomIdle, 80);
+                            return;
+                        }
+                        observer.unobserve(element);
+                        observer.observe(element);
+                    };
+                    zoomWaitTimer = setTimeout(retryWhenZoomIdle, 80);
+                }
+                return;
             }
+            setNearViewport(true);
+            observer.disconnect();
         }, { rootMargin: "600px" });
         observer.observe(element);
-        return () => observer.disconnect();
+        return () => {
+            if (zoomWaitTimer) clearTimeout(zoomWaitTimer);
+            observer.disconnect();
+        };
     }, [ref]);
     return nearViewport;
 }

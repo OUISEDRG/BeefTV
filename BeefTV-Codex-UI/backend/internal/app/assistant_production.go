@@ -166,6 +166,10 @@ func (s *operationSession) SubmitAuthorizedGeneration(userID, turnID, canvasID s
 }
 
 func (s *operationSession) admitProductionTargets(userID, canvasID string, plan operations.GenerationAuthorization, targets []operations.GenerationTarget) (any, error) {
+	return s.admitProductionInputs(userID, canvasID, plan, targets, nil)
+}
+
+func (s *operationSession) admitProductionInputs(userID, canvasID string, plan operations.GenerationAuthorization, targets []operations.GenerationTarget, compiledInputs map[string]map[string]any) (any, error) {
 	raw, err := s.canvas.UserCanvasProject(userID, canvasID)
 	if err != nil {
 		return nil, err
@@ -259,9 +263,12 @@ func (s *operationSession) admitProductionTargets(userID, canvasID string, plan 
 		if meta["status"] == "loading" || meta["taskStatus"] == "queued" || meta["taskStatus"] == "running" || meta["generationSubmissionState"] == "submitting" {
 			return nil, operations.Conflict("production_node_changed", "素材节点已使用其他任务，请先检查当前结果", nil)
 		}
-		input, err := s.productionTaskInput(userID, target, nodes)
-		if err != nil {
-			return nil, err
+		input := compiledInputs[target.NodeID]
+		if input == nil {
+			input, err = s.productionTaskInput(userID, target, nodes)
+			if err != nil {
+				return nil, err
+			}
 		}
 		input["metadata"].(map[string]any)["clientOperationId"] = key
 		input["metadata"].(map[string]any)["assistantProductionTargetHash"] = productionTargetHash(target)

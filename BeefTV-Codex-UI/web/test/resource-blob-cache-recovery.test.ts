@@ -2,10 +2,28 @@ import { afterEach, expect, test } from "bun:test";
 import type LocalForage from "localforage";
 import { installLocalForageStoreFactoryForTests, RESOURCE_BLOBS_STORE_NAME } from "../src/lib/localforage-storage";
 import { apiClient } from "../src/services/api/request";
+import { resolveImageEditSource } from "../src/services/image-storage";
 import { cacheResourceObjectUrl, getCachedResourceBlob, getCachedResourceObjectUrl } from "../src/services/resource-blob-cache";
 
 const originalAdapter = apiClient.defaults.adapter;
 afterEach(() => { apiClient.defaults.adapter = originalAdapter; installLocalForageStoreFactoryForTests(); });
+
+test("image editors recover old desktop resource URLs and never return a protected URL after a read failure", async () => {
+    installLocalForageStoreFactoryForTests(() => ({ ready: async () => undefined, getItem: async () => null, setItem: async (_key: string, value: unknown) => value }) as unknown as LocalForage);
+    const requests: string[] = [];
+    apiClient.defaults.adapter = async (config) => {
+        requests.push(config.url || "");
+        if (config.url?.includes("missing-edit-source")) throw new Error("file unavailable");
+        return { data: new Blob(["subject"], { type: "image/png" }), status: 200, statusText: "OK", headers: {}, config };
+    };
+    const oldUrl = "http://127.0.0.1:45678/api/resources/edit-source/file";
+    const url = await resolveImageEditSource(undefined, oldUrl);
+    expect(url.startsWith("blob:")).toBe(true);
+    expect(await (await fetch(url)).text()).toBe("subject");
+    expect(await resolveImageEditSource("resource:edit-source", "blob:expired")).toBe(url);
+    await expect(resolveImageEditSource(undefined, "/resources/missing-edit-source/file")).rejects.toThrow();
+    expect(requests).toEqual(["/resources/edit-source/file?proxy=1", "/resources/missing-edit-source/file?proxy=1"]);
+});
 
 test("缓存读写失败仍能通过鉴权接口拉取图片，并在会话内复用", async () => {
     installLocalForageStoreFactoryForTests(() => ({

@@ -88,7 +88,7 @@ describe("canvas node toolbar model", () => {
         expect([...groups].filter(([, group]) => group === "primary").map(([id]) => id)).toEqual(["trimRegenerate", "subtitles"]);
         expect([...groups].filter(([, group]) => group === "process").map(([id]) => id)).toEqual(["extractFrames", "extractAudio"]);
         expect(groups.get("download")).toBe("utility");
-        expect(groups.get("timeline")).toBe("workspace");
+        expect(groups.has("timeline")).toBe(false);
         expect(groups.get("uploadVideo")).toBe("more");
         expect(groups.get("delete")).toBe("more");
         expect(groups.get("node-lock")).toBe("more");
@@ -119,21 +119,19 @@ describe("canvas node toolbar model", () => {
         };
 
         expect(displayLabel("subtitles")).toBe("字幕");
-        expect(displayLabel("timeline")).toBe("进入剪辑");
         expect(displayLabel("extractFrames")).toBe("关键帧截取");
         expect(displayLabel("extractAudio")).toBe("音视频分离");
     });
 
-    test.each([CanvasNodeType.Audio, CanvasNodeType.Video])("opens the project timeline from a %s node", (type) => {
+    test.each([CanvasNodeType.Audio, CanvasNodeType.Video])("keeps subtitles but removes the retired timeline action from a %s node", (type) => {
         const node: CanvasNodeData = { id: "media", type, title: "素材", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { storageKey: "resource:media-fixture" } };
         const ctx = createNodeContext(node);
-        const received: CanvasNodeData[] = [];
-        ctx.handlers = { onNodeTimeline: (target) => received.push(target) } as ToolbarHandlers;
-        const timeline = resolveToolbarTools("node-hover", ctx, null).find((tool) => tool.id === "timeline");
-        expect(timeline?.displayLabel).toBe("进入剪辑");
-        expect(resolveNodeToolbarPlacement(timeline!, ctx).group).toBe("workspace");
-        timeline?.run(ctx);
-        expect(received).toEqual([node]);
+        const tools = resolveToolbarTools("node-hover", ctx, null);
+        expect(tools.some((tool) => tool.id === "timeline")).toBe(false);
+        expect(tools.some((tool) => tool.id === "subtitles")).toBe(true);
+        if (type === CanvasNodeType.Video) {
+            expect(tools.some((tool) => tool.id === "trimRegenerate")).toBe(true);
+        }
     });
 
     test("image-only tools carry presentation metadata instead of relying on component ID lists", () => {

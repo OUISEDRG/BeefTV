@@ -1,5 +1,6 @@
 import { getDataUrlByteSize } from "@/lib/image-utils";
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { hasCanvasMediaSource } from "@/lib/canvas/canvas-media-source";
 import { assetResourceId, bindCanvasNodeResourceAsset, canvasNodeResourceId, extractOwnedResourceId } from "@/lib/canvas/canvas-resource-id";
 import type { Asset, AssetCategory, NewAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
@@ -23,7 +24,7 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
     // 文本素材必须直接携带正文；媒体则允许只有持久 storageKey。后者常见于页面重载后：
     // blob/object URL 已失效，但资源定位符仍可从后端重新换取可访问地址，不能因此丢掉素材记录。
     if (node.type === CanvasNodeType.Text && !content) return null;
-    if (isMedia && !content && !storageKey) return null;
+    if (isMedia && !hasCanvasMediaSource(node)) return null;
     if (!isMedia && node.type !== CanvasNodeType.Text) return null;
     const title = node.metadata?.prompt?.slice(0, 24) || node.title || canvasAssetFallbackTitle(node.type);
     const metadata = {

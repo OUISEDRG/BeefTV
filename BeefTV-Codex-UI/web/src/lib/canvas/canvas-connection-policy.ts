@@ -1,6 +1,7 @@
-import { maxModelInputCapacity, type ModelInputSummary } from "@/lib/model-selection";
+import { groupModelsByDisplayName, hasDeclaredModelCapability, maxModelInputCapacity, resolveVideoOperation, type ModelInputSummary } from "@/lib/model-selection";
+import { modelCapabilityConfigFor, videoReferencesForOperation } from "@/lib/model-capabilities";
 import { getNodeAcceptedInputKinds, getNodeGenerationMode, getNodeInputKind, getNodeMaxInputCount } from "@/lib/canvas/node-registry";
-import type { AiConfig } from "@/stores/use-config-store";
+import { normalizeModelOptionValue, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 type ConnectionCandidate = Pick<CanvasConnection, "fromNodeId" | "toNodeId">;
@@ -13,6 +14,9 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
     const target = nodes.find((node) => node.id === candidate.toNodeId);
     if (!target) return "找不到连线目标节点";
     const sourceNode = nodes.find((node) => node.id === candidate.fromNodeId);
+    if (!sourceNode) return "找不到连接源节点";
+    if (candidate.fromNodeId === candidate.toNodeId) return "目标节点不能连接到自身";
+    if (createsReferenceCycle(connections, candidate)) return "此连接会形成循环引用";
     if (sourceNode?.type === CanvasNodeType.Upscale && target.type !== CanvasNodeType.Image && target.type !== CanvasNodeType.Video) return "超分节点右侧只连接图片或视频结果节点";
     const acceptedInputKinds = getNodeAcceptedInputKinds(target.type);
     if (acceptedInputKinds.length) {
@@ -45,15 +49,30 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
     if (mode === "image") {
         if (input.videoCount > 0) return "图片生成节点不能连接参考视频";
         if (input.audioCount > 0) return "图片生成节点不能连接参考音频";
-        return options.ignoreCapacity ? "" : capacityError(config, mode, "image", visualInputCount, "参考图");
+        return options.ignoreCapacity ? "" : capacityError(config, target, input, mode, "image", visualInputCount, "参考图");
     }
     if (mode === "video") {
-        return options.ignoreCapacity ? "" : capacityError(config, mode, "image", visualInputCount, "参考图") || capacityError(config, mode, "video", input.videoCount, "参考视频") || capacityError(config, mode, "audio", input.audioCount, "参考音频");
+        return options.ignoreCapacity ? "" : capacityError(config, target, input, mode, "image", visualInputCount, "参考图") || capacityError(config, target, input, mode, "video", input.videoCount, "参考视频") || capacityError(config, target, input, mode, "audio", input.audioCount, "参考音频");
     }
     if (mode === "text" && input.audioCount > 0) return "文本生成节点不能连接参考音频";
     if (mode === "audio" && input.characterCount > 1) return "角色配音一次只能连接一个角色卡";
     if (mode === "audio" && (input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0)) return "音频生成节点只接受文本或单个角色卡输入";
     return "";
+}
+
+function createsReferenceCycle(connections: CanvasConnection[], candidate: ConnectionCandidate) {
+    const outgoing = new Map<string, string[]>();
+    for (const connection of connections) outgoing.set(connection.fromNodeId, [...(outgoing.get(connection.fromNodeId) || []), connection.toNodeId]);
+    const visited = new Set<string>();
+    const pending = [candidate.toNodeId];
+    for (let index = 0; index < pending.length; index++) {
+        const id = pending[index];
+        if (id === candidate.fromNodeId) return true;
+        if (visited.has(id)) continue;
+        visited.add(id);
+        pending.push(...(outgoing.get(id) || []));
+    }
+    return false;
 }
 
 function acceptedInputKindLabel(kind: "image" | "video" | "audio" | "text" | "table_data") {
@@ -81,9 +100,26 @@ export function connectionInputSummary(targetNodeId: string, nodes: CanvasNodeDa
     return input;
 }
 
-function capacityError(config: AiConfig, capability: "image" | "video", kind: "image" | "video" | "audio", count: number, label: string) {
-    const maximum = maxModelInputCapacity(config, capability, kind);
+function capacityError(config: AiConfig, target: CanvasNodeData, input: ModelInputSummary, capability: "image" | "video", kind: "image" | "video" | "audio", count: number, label: string) {
+    if (!count) return "";
+    const options = selectableModelsByCapability(config, capability);
+    const preferred = target.metadata?.model || (capability === "video" ? config.videoModel : config.imageModel) || config.model;
+    const selected = normalizeModelOptionValue(preferred, config.channels);
+    const group = groupModelsByDisplayName(config, options).find(item => item.models.includes(selected));
+    // Same-name variants may route between text/image/audio inputs. An unrelated
+    // channel's larger limits must not authorize the currently selected model.
+    const scopedConfig = { ...config, vquality: target.metadata?.vquality ?? config.vquality };
+    const maximum = group
+        ? group.models.some(model => !hasDeclaredModelCapability(config, model, capability)) ? null : Math.max(...group.models.map(model => {
+            const profile = modelCapabilityConfigFor(scopedConfig, model);
+            if (capability === "image") return kind === "image" ? profile.image!.references.maxImages : 0;
+            const operation = target.metadata?.videoEditOperation || resolveVideoOperation(input);
+            const refs = videoReferencesForOperation(profile.video!, operation);
+            return kind === "image" ? refs.maxImages : kind === "video" ? refs.maxVideos : refs.maxAudios;
+        }))
+        : maxModelInputCapacity(config, capability, kind);
     if (maximum === null || count <= maximum) return "";
     const unit = kind === "image" ? "张" : "个";
-    return maximum > 0 ? `已配置模型最多支持 ${maximum} ${unit}${label}` : `已配置模型均不支持${label}`;
+    const scope = group ? "当前模型在此模式下" : "当前已配置渠道";
+    return maximum > 0 ? `${scope}最多支持 ${maximum} ${unit}${label}` : `${scope}的接入配置未开放${label}，请刷新模型目录或选择支持该输入的模型`;
 }

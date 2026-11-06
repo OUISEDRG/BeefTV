@@ -7,7 +7,7 @@ import { CANVAS_IMAGE_ASSET_DND_TYPE } from "@/components/canvas/canvas-asset-tr
 import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { CANVAS_PROJECT_CHAPTER_DND_TYPE, type CanvasProjectChapterPayload } from "@/components/canvas/canvas-project-sidebar";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
+import { getDataUrlByteSize } from "@/lib/image-utils";
 import { isLocalRuntimeMode } from "@/lib/runtime-mode";
 import { audioMetadata, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
@@ -15,7 +15,8 @@ import { connectDirectorReferenceNodes } from "@/lib/canvas/director/director-re
 import { mediaResultMetadata } from "@/lib/canvas/canvas-node-semantics";
 import { isAudioFile } from "@/lib/canvas/canvas-project-generation";
 import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
-import { CANVAS_UPLOAD_ACCEPT, createFileUploadPlaceholder, uploadNodeType, uploadPercent } from "@/lib/canvas/canvas-file-upload";
+import { CANVAS_UPLOAD_ACCEPT, canRelayoutCanvasUploadBatch, createFileUploadPlaceholder, fitCanvasUploadedVideoNode, readImageSourceSize, uploadNodeType, uploadPercent } from "@/lib/canvas/canvas-file-upload";
+import { layoutCanvasInsertedNodes } from "@/lib/canvas/canvas-layout";
 import { canvasNodesMissingResourceAssetBinding } from "@/lib/canvas/canvas-node-asset";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { isReferenceHTTPSLink } from "@/services/api/reference-link-replacement";
@@ -36,6 +37,7 @@ type UseCanvasUploadOptions = {
     pageUi: CanvasPageUiStoreHook;
     canvasId: string;
     domainProjectId?: string;
+    viewportScale?: number;
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
     selectedNodeIdsRef: { current: Set<string> };
@@ -52,9 +54,7 @@ export type StartCanvasUploadStatus = (title: string, detail: string, total?: nu
 };
 
 const NODE_STATUS_SUCCESS = "success" as const;
-const BATCH_UPLOAD_COLUMNS = 3;
-const BATCH_UPLOAD_COLUMN_GAP = 380;
-const BATCH_UPLOAD_ROW_GAP = 300;
+const BATCH_UPLOAD_COLUMNS = 4;
 
 const CANVAS_BATCH_TABLE_SELECTOR = "[data-canvas-batch-table]";
 
@@ -67,6 +67,7 @@ export function useCanvasUpload({
     pageUi,
     canvasId,
     domainProjectId,
+    viewportScale = 1,
     nodesRef,
     connectionsRef,
     selectedNodeIdsRef,
@@ -210,10 +211,10 @@ export function useCanvasUpload({
     }, [canvasId, domainProjectId, lifetime, mountedRef, queryClient, setNodes]);
 
     const activeUploadsRef = useRef(new Set<string>());
-    const createFileNode = useCallback(async (file: File, position: Position, replaceId?: string) => {
+    const createFileNode = useCallback(async (file: File, position: Position, replaceId?: string, preparedPlaceholder?: CanvasNodeData) => {
         const original = replaceId ? nodesRef.current.find((node) => node.id === replaceId) : undefined;
         if (replaceId && (!original || activeUploadsRef.current.has(replaceId))) return null;
-        const id = replaceId || `upload-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const id = replaceId || preparedPlaceholder?.id || `upload-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const guard = createOwnedCanvasUploadGuard({
             lifetime,
             canvasId,
@@ -223,7 +224,7 @@ export function useCanvasUpload({
         activeUploadsRef.current.add(id);
         const progress = startUploadStatus(replaceId ? "替换文件" : "上传文件", "读取文件信息", domainProjectId ? 4 : 3);
         try {
-            const placeholder = await createFileUploadPlaceholder(id, file, position);
+            const placeholder = preparedPlaceholder || await createFileUploadPlaceholder(id, file, position);
             if (!guard.alive()) return null;
             const uploadPlaceholder = placeholder.type === CanvasNodeType.Image || placeholder.type === CanvasNodeType.Video || placeholder.type === CanvasNodeType.Audio
                 ? { ...placeholder, metadata: mediaResultMetadata("upload", placeholder.metadata) }
@@ -233,6 +234,7 @@ export function useCanvasUpload({
                 metadata: mediaResultMetadata("upload", { ...item.metadata, fileUpload: "uploading", fileUploadProgress: undefined, status: undefined, size: undefined, errorDetails: undefined }),
             } : item) : [...current, uploadPlaceholder];
             nodesRef.current = applyPlaceholder(nodesRef.current);
+            const placedPlaceholder = nodesRef.current.find((item) => item.id === id)!;
             setNodes(applyPlaceholder);
             selectInsertedNode(id, "close");
             let lastPercent: number | undefined;
@@ -265,20 +267,16 @@ export function useCanvasUpload({
                 progress.done("上传完成，画布占位已移除");
                 return null;
             }
-            const videoSize = placeholder.type === CanvasNodeType.Video && metadata.naturalWidth && metadata.naturalHeight
-                ? fitNodeSize(metadata.naturalWidth, metadata.naturalHeight)
-                : null;
+            const sizedNode = placeholder.type === CanvasNodeType.Video && metadata.naturalWidth && metadata.naturalHeight
+                ? fitCanvasUploadedVideoNode(currentNode, placedPlaceholder, metadata.naturalWidth, metadata.naturalHeight)
+                : currentNode;
             const node: CanvasNodeData = {
-                ...currentNode, type: placeholder.type,
-                ...(videoSize ? { ...videoSize, position: {
-                    x: currentNode.position.x + (currentNode.width - videoSize.width) / 2,
-                    y: currentNode.position.y + (currentNode.height - videoSize.height) / 2,
-                } } : {}),
+                ...sizedNode, type: placeholder.type,
                 metadata: mediaResultMetadata("upload", {
                     ...currentNode.metadata, ...metadata,
                     fileUpload: undefined, fileUploadProgress: undefined, errorDetails: undefined,
                     ...(replaceId ? {
-                        assetId: undefined, taskId: undefined, freeResize: false,
+                        assetId: undefined, taskId: undefined,
                         isBatchRoot: undefined, batchRootId: undefined, batchChildIds: undefined,
                         batchFailedCount: undefined, batchUsesReferenceImages: undefined,
                         generationType: undefined, generationResultPlacement: undefined,
@@ -491,21 +489,41 @@ export function useCanvasUpload({
             return false;
         }
         const center = uploadTarget?.position || getCanvasCenter();
-        const columns = Math.min(BATCH_UPLOAD_COLUMNS, supportedFiles.length);
-        const originX = center.x - ((columns - 1) * BATCH_UPLOAD_COLUMN_GAP) / 2;
-        const createdIds: string[] = [];
-        for (let index = 0; index < supportedFiles.length; index += 1) {
+        const prepared: { file: File; node: CanvasNodeData }[] = [];
+        for (const file of supportedFiles) {
             if (!current()) return false;
-            const file = supportedFiles[index];
-            const position = {
-                x: originX + (index % columns) * BATCH_UPLOAD_COLUMN_GAP,
-                y: center.y + Math.floor(index / columns) * BATCH_UPLOAD_ROW_GAP,
-            };
-            const createdId = await createFileNode(file, position);
+            try {
+                const node = await createFileUploadPlaceholder(createClientId(), file, center);
+                if (!current()) return false;
+                prepared.push({ file, node });
+            } catch (error) {
+                if (!current()) return false;
+                message.error(error instanceof Error ? error.message : "无法读取文件尺寸");
+            }
+        }
+        const layoutOptions = { columns: BATCH_UPLOAD_COLUMNS, viewportScale };
+        const placed = layoutCanvasInsertedNodes(prepared.map(({ node }) => node), center, nodesRef.current, layoutOptions);
+        const createdIds: string[] = [];
+        for (let index = 0; index < prepared.length; index += 1) {
+            if (!current()) return false;
+            const { file } = prepared[index];
+            const placeholder = placed[index];
+            const createdId = await createFileNode(file, center, undefined, placeholder);
             if (!current()) return false;
             if (createdId) createdIds.push(createdId);
         }
         if (!createdIds.length || !current()) return false;
+        // Video dimensions can arrive from the server after upload. Place the
+        // completed batch once more using its final card sizes, including failures.
+        const preparedIds = new Set(prepared.map(({ node }) => node.id));
+        const currentNodes = nodesRef.current;
+        if (canRelayoutCanvasUploadBatch(placed, currentNodes)) {
+            const finalNodes = layoutCanvasInsertedNodes(currentNodes.filter((node) => preparedIds.has(node.id)), center, currentNodes, layoutOptions);
+            const byId = new Map(finalNodes.map((node) => [node.id, node]));
+            const nextNodes = currentNodes.map((node) => byId.get(node.id) || node);
+            nodesRef.current = nextNodes;
+            setNodes(nextNodes);
+        }
         let linkedReferenceCount = 0;
         if (uploadTarget?.referenceToNodeId) {
             const linked = connectDirectorReferenceNodes(nodesRef.current, connectionsRef.current, createdIds, uploadTarget.referenceToNodeId, () => `director-reference-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -531,7 +549,7 @@ export function useCanvasUpload({
         else if (failedCount) message.warning(`已添加 ${createdIds.length} 个文件，${failedCount} 个上传失败`);
         else message.success(`已添加 ${createdIds.length} 个文件到画布`);
         return true;
-    }, [pageUi, canvasId, lifetime, connectionsRef, createFileNode, getCanvasCenter, message, mountedRef, nodesRef, setConnections, setNodes]);
+    }, [pageUi, canvasId, lifetime, connectionsRef, createFileNode, getCanvasCenter, message, mountedRef, nodesRef, setConnections, setNodes, viewportScale]);
 
     const handleImportUrl = useCallback(async (url: string,kind: "image" | "video" | "audio") => {
         if(!isReferenceHTTPSLink(url)) throw new Error("请填写不含账号密码的 HTTPS 素材网址");
@@ -931,7 +949,8 @@ export function useCanvasUpload({
             : payload.storageKey
                 ? { url: payload.dataUrl, storageKey: payload.storageKey, width: payload.width || 1, height: payload.height || 1, bytes: payload.bytes || 0, mimeType: payload.mimeType || "image/png" }
                 : await uploadImage(payload.dataUrl);
-        const meta = !payload.storageKey && (!payload.width || !payload.height) ? await readImageMeta(storedImage.url) : storedImage;
+        const knownSize = uploadedFreshResource ? storedImage.width > 0 && storedImage.height > 0 : Boolean(payload.width && payload.width > 0 && payload.height && payload.height > 0);
+        const meta = knownSize ? storedImage : await readImageSourceSize(await resolveImageUrl(payload.storageKey || storedImage.storageKey, storedImage.url));
         let resolvedAssetId = payload.assetId;
         if (uploadedFreshResource && resourceIdFromStorageKey(storedImage.storageKey)) {
             const existingAsset = resolvedAssetId
@@ -963,11 +982,9 @@ export function useCanvasUpload({
     }, []);
 
     const createAssetPayloadNodes = useCallback(async (payloads: InsertAssetPayload[], origin: Position) => {
-        return Promise.all(payloads.map((payload, index) => createAssetPayloadNode(payload, {
-            x: origin.x + (index % BATCH_UPLOAD_COLUMNS) * BATCH_UPLOAD_COLUMN_GAP,
-            y: origin.y + Math.floor(index / BATCH_UPLOAD_COLUMNS) * BATCH_UPLOAD_ROW_GAP,
-        })));
-    }, [createAssetPayloadNode]);
+        const nodes = await Promise.all(payloads.map((payload) => createAssetPayloadNode(payload, origin)));
+        return layoutCanvasInsertedNodes(nodes, origin, nodesRef.current, { columns: BATCH_UPLOAD_COLUMNS, viewportScale });
+    }, [createAssetPayloadNode, nodesRef, viewportScale]);
 
     const insertAssetPayloads = useCallback(async (payloads: InsertAssetPayload[], origin: Position, successMessage: string, failureMessage: string): Promise<CanvasNodeData[]> => {
         const owner = lifetime.capture(canvasId);

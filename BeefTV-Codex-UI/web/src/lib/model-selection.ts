@@ -400,7 +400,8 @@ function videoOperationLabel(operation: string) {
     if (operation === "image_to_video") return "图生视频";
     if (operation === "audio_to_video") return "音频生视频";
     if (operation === "reference_to_video") return "全模态参考";
-    if (operation === "extend") return "视频续写";
+    if (operation === "extend") return "视频延长";
+    if (operation === "upscale") return "视频增强";
     if (operation === "draft_to_final") return "样片转成片";
     return "当前生成模式";
 }

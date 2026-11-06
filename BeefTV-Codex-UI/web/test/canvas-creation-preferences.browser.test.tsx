@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { chromium, type Browser } from "playwright";
 import { productCss } from "./fixtures/product-css";
+import { existsSync } from "node:fs";
 
 let browser: Browser;
 let server: ReturnType<typeof Bun.serve>;
@@ -25,7 +26,8 @@ beforeAll(async () => {
         if (path.startsWith("/api/")) return Response.json({ code: 0, data: { items: [], providers: [], total: 0 } });
         return new Response('<!doctype html><html><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/harness.css"><body class="app-product-overlays"><div id="root"></div><script type="module" src="/harness.js"></script></body></html>', { headers: { "Content-Type": "text/html" } });
     } });
-    browser = await chromium.launch({ headless: true });
+    const executablePath = [process.env.CHROME_PATH, chromium.executablePath(), "C:/Program Files/Google/Chrome/Application/chrome.exe"].find(path => path && existsSync(path));
+    browser = await chromium.launch({ headless: true, executablePath });
 }, 60000);
 
 afterAll(async () => { await browser?.close(); server?.stop(true); });
@@ -47,9 +49,50 @@ for (const mode of ["image", "video"]) {
             expect(current.size).toBe(mode === "image" ? "1:1" : "9:16");
             await page.getByRole("button", { name: "New node", exact: true }).click();
             const next = JSON.parse((await page.getByTestId("next-config").textContent())!);
-            const keys = mode === "image" ? ["model", "size", "quality", "count", "transparentBackground"] : ["model", "size", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark"];
+            const keys = mode === "image" ? ["model", "size", "quality", "transparentBackground"] : ["model", "size", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark"];
             for (const key of keys) expect(next[key]).toBe(current[key]);
+            if (mode === "image") { expect(current.count).toBe("2"); expect(next.count).toBe("1"); }
             expect(errors).toEqual([]);
         } finally { await page.close(); }
     }, 30000);
 }
+
+test("single-output image counts support typing and stepping without leaking to new nodes", async () => {
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/*", route => new URL(route.request().url()).origin === server.url.origin ? route.continue() : route.abort());
+    try {
+        await page.goto(`${server.url}?mode=image&single-output`);
+        await page.getByRole("button", { name: /^高级设置：/ }).click();
+        const count = page.getByRole("spinbutton", { name: "自定义生成张数" });
+        expect(await count.inputValue()).toBe("1");
+        expect(await page.getByRole("button", { name: "减少生成张数" }).isDisabled()).toBe(true);
+        await page.getByRole("button", { name: "增加生成张数" }).click();
+        expect(await count.inputValue()).toBe("2");
+        await count.fill("8");
+        await count.press("Enter");
+        expect(await page.getByRole("button", { name: "增加生成张数" }).isDisabled()).toBe(true);
+        expect(JSON.parse((await page.getByTestId("current-config").textContent())!).count).toBe("8");
+        await page.getByRole("button", { name: "减少生成张数" }).click();
+        expect(await count.inputValue()).toBe("7");
+        await count.fill("99");
+        await count.press("Enter");
+        expect(await count.inputValue()).toBe("8");
+        await count.fill("0");
+        await count.press("Enter");
+        expect(await count.inputValue()).toBe("1");
+        await count.fill("4");
+        await count.press("ArrowUp");
+        expect(await count.inputValue()).toBe("5");
+        await count.press("ArrowDown");
+        expect(await count.inputValue()).toBe("4");
+        await page.getByRole("button", { name: "New node", exact: true }).click();
+        expect(JSON.parse((await page.getByTestId("current-config").textContent())!).count).toBe("4");
+        expect(JSON.parse((await page.getByTestId("next-config").textContent())!).count).toBe("1");
+        expect(JSON.parse((await page.getByTestId("preferences").textContent())!).count).toBeUndefined();
+        await page.getByRole("button", { name: /^高级设置：/ }).click();
+        expect(await count.inputValue()).toBe("4");
+        expect(errors).toEqual([]);
+    } finally { await page.close(); }
+}, 30000);

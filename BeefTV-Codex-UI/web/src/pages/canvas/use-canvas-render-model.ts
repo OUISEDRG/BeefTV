@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
-import { isFrameNode } from "@/lib/canvas/canvas-frame";
-import { canvasLodTypicalNodeExtent, resolveCanvasLodActive } from "@/lib/canvas/canvas-lod";
+import { getCollapsedParentFrame, isFrameNode } from "@/lib/canvas/canvas-frame";
+import { CANVAS_LOD_ENTER_SCREEN_PX, canvasLodTypicalNodeExtent, resolveCanvasLodActive } from "@/lib/canvas/canvas-lod";
+import { prewarmCanvasLodThumbnails } from "@/lib/canvas/canvas-lod-thumbnails";
 import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
 import { canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS, shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
 import { CANVAS_GESTURE_RETAIN_LIMIT, type CanvasVirtualizationViewport } from "@/lib/canvas/canvas-viewport-render-sync";
@@ -52,6 +53,33 @@ type UseCanvasRenderModelOptions = {
 
 const EMPTY_LOD_NODES: CanvasNodeData[] = [];
 const EMPTY_PINNED_NODE_IDS: ReadonlySet<string> = new Set();
+const EMPTY_CONFIG_INPUTS_BY_ID = new Map<string, NodeGenerationInput[]>();
+
+function sameConfigInputs(left: NodeGenerationInput[] | undefined, right: NodeGenerationInput[] | undefined) {
+    if (left === right) return true;
+    if (!left || !right || left.length !== right.length) return false;
+    return left.every((item, index) => {
+        const other = right[index];
+        return item.nodeId === other.nodeId
+            && item.type === other.type
+            && item.sourceKind === other.sourceKind
+            && item.title === other.title
+            && item.previewUrl === other.previewUrl
+            && item.alwaysIncludeText === other.alwaysIncludeText
+            && item.text === other.text
+            && item.image?.id === other.image?.id
+            && item.image?.storageKey === other.image?.storageKey
+            && item.image?.dataUrl === other.image?.dataUrl
+            && item.video?.id === other.video?.id
+            && item.video?.storageKey === other.video?.storageKey
+            && item.video?.url === other.video?.url
+            && item.audio?.id === other.audio?.id
+            && item.audio?.storageKey === other.audio?.storageKey
+            && item.audio?.url === other.audio?.url
+            && item.character?.assetId === other.character?.assetId
+            && item.character?.requestedVersionId === other.character?.requestedVersionId;
+    });
+}
 
 export function useCanvasRenderModel({
     nodes,
@@ -99,6 +127,7 @@ export function useCanvasRenderModel({
         const batchChildIndexByRootId = new Map<string, Map<string, number>>();
 
         for (const node of nodes) {
+            if (node.metadata?.mediaVersionOwnerId) { renderHiddenNodeIds.add(node.id); continue; }
             const rootId = node.metadata?.batchRootId;
             const root = rootId ? nodeById.get(rootId) : undefined;
             if (root && !root.metadata?.imageBatchExpanded) {
@@ -112,13 +141,14 @@ export function useCanvasRenderModel({
                 const children = frameChildrenById.get(parent.id);
                 if (children) children.push(node);
                 else frameChildrenById.set(parent.id, [node]);
-                if (parent.metadata?.frame?.collapsed) renderHiddenNodeIds.add(node.id);
             }
+            const collapsedFrame = getCollapsedParentFrame(node, nodeById);
+            if (collapsedFrame) renderHiddenNodeIds.add(node.id);
 
             if (node.metadata?.isBatchRoot) batchRoots.push(node);
             // 资产托盘与节点渲染共用同一份可视内容：生成结果在资源尚未
             // 完成持久化时可能只有 previewContent，不能因此从“当前画布”中消失。
-            if (node.type === CanvasNodeType.Image && (node.metadata?.content || node.metadata?.previewContent) && !collapsedBatchChildIds.has(node.id) && !(parent && isFrameNode(parent) && parent.metadata?.frame?.collapsed)) {
+            if (node.type === CanvasNodeType.Image && (node.metadata?.content || node.metadata?.previewContent) && !collapsedBatchChildIds.has(node.id) && !collapsedFrame) {
                 canvasImageNodes.push(node);
             }
         }
@@ -186,7 +216,8 @@ export function useCanvasRenderModel({
     const lodNodesRef = useRef<CanvasNodeData[]>(EMPTY_LOD_NODES);
     const lodActiveRef = useRef(false);
     const lodScaleRef = useRef<number | null>(null);
-    const { visibleNodes, lodNodes, lodActive } = useMemo(() => {
+    const typicalExtentRef = useRef(0);
+    const { visibleNodes, lodNodes, lodActive, lodEnterScale } = useMemo(() => {
         const frames: CanvasNodeData[] = [];
         const regular: CanvasNodeData[] = [];
         const renderedNodeIds = renderedNodeIdsRef.current;
@@ -233,10 +264,14 @@ export function useCanvasRenderModel({
         // The typical extent follows whichever nodes are in view, so a pan can
         // cross the threshold at a fixed zoom. Only a scale change may switch
         // modes mid-gesture; a pan resolves it once, at the gesture-end commit.
+        const measuredExtent = canvasLodTypicalNodeExtent(regular);
+        if (!viewportInteracting || typicalExtentRef.current <= 0) typicalExtentRef.current = measuredExtent;
+        const typicalExtent = typicalExtentRef.current || measuredExtent;
+        const lodEnterScale = typicalExtent > 0 ? CANVAS_LOD_ENTER_SCREEN_PX / typicalExtent : 0;
         const panOnly = viewportInteracting && lodScaleRef.current === viewport.k;
         const nextLodActive = panOnly ? lodActiveRef.current : resolveCanvasLodActive({
             previous: lodActiveRef.current,
-            typicalExtent: canvasLodTypicalNodeExtent(regular),
+            typicalExtent,
             scale: viewport.k,
             deferExit: viewportInteracting,
         });
@@ -249,13 +284,16 @@ export function useCanvasRenderModel({
             // it receives every displayable node instead of a stale window.
             nextLod = nodes.filter((node) => !isFrameNode(node) && !renderHiddenNodeIds.has(node.id));
             const dragging = Boolean(dragPreview?.nodeIds.size);
-            // Transient drag transforms are bound to the elements mounted when
-            // the drag began, so DOM membership is frozen until it ends. Cards
-            // are not kept over the overview canvas mid-zoom: drawing both
-            // layers costs more than mounting them again (measured in #50).
-            domRegular = regular.filter((node) => dragging ? previousDomIds.has(node.id) : lodPinnedNodeIds.has(node.id));
+            // Cards already mounted when the gesture began stay in the DOM tree
+            // and are hidden via CSS display:none while the overview canvas is
+            // active, avoiding both double-rasterization and the 33-card
+            // unmount/remount spike on entering and leaving LOD.
+            const retainGestureDom = gestureRetainedIds.size > 0;
+            domRegular = dragging
+                ? regular.filter((node) => previousDomIds.has(node.id))
+                : regular.filter((node) => (retainGestureDom && previousDomIds.has(node.id)) || lodPinnedNodeIds.has(node.id));
         }
-        retainedNodeIdsRef.current = new Set([...frames, ...regular].map((node) => node.id));
+        retainedNodeIdsRef.current = new Set([...frames, ...(nextLodActive ? domRegular : regular)].map((node) => node.id));
 
         const next = [...frames, ...domRegular];
         const previous = visibleNodesRef.current;
@@ -264,13 +302,14 @@ export function useCanvasRenderModel({
         const previousLod = lodNodesRef.current;
         const stableLod = previousLod.length === nextLod.length && nextLod.every((node, index) => node === previousLod[index]) ? previousLod : nextLod;
         lodNodesRef.current = stableLod;
-        return { visibleNodes: nextVisible, lodNodes: stableLod, lodActive: nextLodActive };
+        return { visibleNodes: nextVisible, lodNodes: stableLod, lodActive: nextLodActive, lodEnterScale };
     }, [dragPreview, lodPinnedNodeIds, nodeById, nodeIndexById, nodeSpatialIndex, nodes, renderBounds, renderHiddenNodeIds, selectedNodeIds, viewport.k, viewportInteracting]);
     useEffect(() => {
         domNodeIdsRef.current = new Set(visibleNodes.map((node) => node.id));
         // Enter/retain hysteresis tracks what is displayed in the camera window.
         renderedNodeIdsRef.current = retainedNodeIdsRef.current;
-    }, [lodNodes, visibleNodes]);
+        if (!viewportInteracting && visibleNodes.length > 0) prewarmCanvasLodThumbnails(visibleNodes);
+    }, [lodNodes, viewportInteracting, visibleNodes]);
 
     const imageAssets = useMemo(() => assets.filter((asset): asset is ImageAsset => asset.kind === "image" && asset.status !== "archived"), [assets]);
     const semanticNodesRef = useRef(nodes);
@@ -352,10 +391,8 @@ export function useCanvasRenderModel({
             const toNode = geometryById.get(connection.toNodeId);
             if (!fromNode || !toNode) return;
             if (hiddenByBatch(fromNode) || hiddenByBatch(toNode)) return;
-            const fromParent = fromNode.parentId ? geometryById.get(fromNode.parentId) : null;
-            const toParent = toNode.parentId ? geometryById.get(toNode.parentId) : null;
-            const displayFrom = fromParent && isFrameNode(fromParent) && fromParent.metadata?.frame?.collapsed ? fromParent : fromNode;
-            const displayTo = toParent && isFrameNode(toParent) && toParent.metadata?.frame?.collapsed ? toParent : toNode;
+            const displayFrom = getCollapsedParentFrame(fromNode, geometryById) || fromNode;
+            const displayTo = getCollapsedParentFrame(toNode, geometryById) || toNode;
             if (displayFrom.id === displayTo.id) return;
             const left = Math.min(displayFrom.position.x, displayTo.position.x);
             const top = Math.min(displayFrom.position.y, displayTo.position.y);
@@ -408,8 +445,8 @@ export function useCanvasRenderModel({
         return next;
     }, [connectionSpatialIndex, dragPreview, nodeById, renderBounds]);
 
+    const configInputsByIdRef = useRef<Map<string, NodeGenerationInput[]>>(EMPTY_CONFIG_INPUTS_BY_ID);
     const configInputsById = useMemo(() => {
-        const map = new Map<string, NodeGenerationInput[]>();
         const configNodeIds = new Set<string>();
         visibleNodes.forEach((node) => {
             if (node.type === CanvasNodeType.Config) configNodeIds.add(node.id);
@@ -418,7 +455,17 @@ export function useCanvasRenderModel({
             if (nodeById.get(nodeId)?.type === CanvasNodeType.Config) configNodeIds.add(nodeId);
         });
         if (dialogNodeId && nodeById.get(dialogNodeId)?.type === CanvasNodeType.Config) configNodeIds.add(dialogNodeId);
+        if (configNodeIds.size === 0) {
+            configInputsByIdRef.current = EMPTY_CONFIG_INPUTS_BY_ID;
+            return EMPTY_CONFIG_INPUTS_BY_ID;
+        }
+        const map = new Map<string, NodeGenerationInput[]>();
         configNodeIds.forEach((nodeId) => map.set(nodeId, buildNodeGenerationInputs(nodeId, semanticNodes, connections)));
+        const previous = configInputsByIdRef.current;
+        if (previous.size === map.size && [...map.entries()].every(([id, inputs]) => sameConfigInputs(previous.get(id), inputs))) {
+            return previous;
+        }
+        configInputsByIdRef.current = map;
         return map;
     }, [connections, dialogNodeId, nodeById, selectedNodeIds, semanticNodes, visibleNodes]);
     const activeDirectorNode = useMemo(() => semanticNodes.find((node) => node.id === directorNodeId) || null, [directorNodeId, semanticNodes]);
@@ -468,6 +515,7 @@ export function useCanvasRenderModel({
         imageAssets,
         infoNode,
         lodActive,
+        lodEnterScale,
         lodNodes,
         maskEditNode,
         mentionReferencesByNodeId,

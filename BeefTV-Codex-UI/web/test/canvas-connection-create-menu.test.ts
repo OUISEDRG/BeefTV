@@ -6,7 +6,6 @@ const css = readFileSync(new URL("../src/styles/globals.css", import.meta.url), 
 
 test("connection menu reuses the compact create menu with the supported node set", () => {
     expect(component).toContain('<CanvasCreateMenu commands={commands} layout="list"');
-    expect(component).toContain('title="引用该节点生成"');
     const commands = component.match(/command\("[^"]+"/g) || [];
     expect(commands).toHaveLength(7);
     for (const id of ["text", "image", "video", "audio", "smart-edit", "director", "script"]) {

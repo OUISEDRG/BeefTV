@@ -18,7 +18,7 @@ test("生成图片拉取失败显示重试，点击后恢复图片，明暗主�
         const path = new URL(request.url).pathname;
         if (path === "/harness.js") return new Response(script, { headers: { "Content-Type": "text/javascript" } });
         if (path === "/api/resources/preview/file") {
-            if (++downloads === 1) return failureMode === "transport" ? new Response("temporarily unavailable", { status: 503 }) : new Response("invalid image bytes", { headers: { "Content-Type": "image/png" } });
+            if (++downloads === 1 && failureMode !== "none") return failureMode === "transport" ? new Response("temporarily unavailable", { status: 503 }) : new Response("invalid image bytes", { headers: { "Content-Type": "image/png" } });
             return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>', { headers: { "Content-Type": "image/svg+xml" } });
         }
         if (path.startsWith("/api/")) return Response.json({ code: 0, data: {}, msg: "" });
@@ -27,14 +27,14 @@ test("生成图片拉取失败显示重试，点击后恢复图片，明暗主�
     const executablePath = [process.env.CHROME_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find((path) => path && existsSync(path));
     const browser = await chromium.launch({ executablePath, headless: true });
     try {
-        for (const scenario of [{ theme: "light", mode: "transport", scale: 1 }, { theme: "dark", mode: "decode", scale: 1 }, { theme: "light", mode: "decode", scale: 0.2 }, { theme: "dark", mode: "transport", scale: 0.2 }]) {
+        for (const scenario of [{ theme: "light", mode: "transport", scale: 1 }, { theme: "dark", mode: "decode", scale: 1 }, { theme: "light", mode: "decode", scale: 0.2 }, { theme: "dark", mode: "transport", scale: 0.2 }, { theme: "light", mode: "transport", scale: 1, storageOnly: true }, { theme: "dark", mode: "decode", scale: 1, storageOnly: true }]) {
             const { theme, mode, scale } = scenario;
             failureMode = mode;
             downloads = 0;
             const context = await browser.newContext({ viewport: { width: 390, height: 500 } });
             const page = await context.newPage();
             page.on("pageerror", (error) => console.error(error.message));
-            await page.goto(`${server.url}?theme=${theme}&scale=${scale}`);
+            await page.goto(`${server.url}?theme=${theme}&scale=${scale}${scenario.storageOnly ? "&storageOnly=1" : ""}`);
             const status = page.getByRole("status", { name: "图片加载失败" });
             await status.waitFor({ timeout: 7000 });
             expect(await status.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
@@ -59,6 +59,21 @@ test("生成图片拉取失败显示重试，点击后恢复图片，明暗主�
             expect(await page.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(16);
             expect(downloads).toBe(2);
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+            await context.close();
+        }
+        for (const theme of ["light", "dark"]) {
+            failureMode = "none";
+            downloads = 0;
+            const context = await browser.newContext({ viewport: { width: 390, height: 500 } });
+            const page = await context.newPage();
+            await page.goto(`${server.url}?theme=${theme}&storageOnly=1`);
+            for (let load = 0; load < 2; load++) {
+                await page.waitForFunction(() => document.querySelector("img")?.naturalWidth === 16);
+                expect(await page.locator("img").evaluate((img: HTMLImageElement) => img.src.startsWith("blob:"))).toBe(true);
+                expect(await page.locator(".canvas-node-empty-image-mark").count()).toBe(0);
+                if (load === 0) await page.reload();
+            }
+            expect(downloads).toBeGreaterThanOrEqual(1);
             await context.close();
         }
     } finally { await browser.close(); server.stop(true); }

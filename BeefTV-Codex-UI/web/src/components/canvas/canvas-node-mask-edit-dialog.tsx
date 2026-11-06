@@ -10,6 +10,7 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import { dreamaImageToolSupport } from "@/lib/canvas/dreama-image-tool-support";
+import { buildGenerationConfig } from "@/lib/canvas/canvas-generation-config";
 
 export type CanvasImageMaskEditPayload = {
     prompt: string;
@@ -38,7 +39,10 @@ export function CanvasImageMaskEditor({ node, imageDimensions, scale, config, on
     const [mode, setMode] = useState<DrawMode>("paint");
     const [error, setError] = useState("");
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [generationConfig, setGenerationConfig] = useState<AiConfig>(() => config);
+    const [generationConfig, setGenerationConfig] = useState<AiConfig>(() => {
+        const initial = buildGenerationConfig(config, node, "image");
+        return { ...initial, imageModel: initial.model };
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const theme = canvasThemes[useActiveTheme()];
     const supportId = useId();
@@ -86,6 +90,8 @@ export function CanvasImageMaskEditor({ node, imageDimensions, scale, config, on
         setIsSubmitting(true);
         try {
             await onConfirm({ prompt: nextPrompt, maskDataUrl: buildEditMask(canvas), generationConfig: { model: generationConfig.model, imageModel: generationConfig.imageModel, size: generationConfig.size, quality: generationConfig.quality, count: generationConfig.count, transparentBackground: generationConfig.transparentBackground } });
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "局部重绘准备失败，请重试");
         } finally { setIsSubmitting(false); }
     };
     const inverseScale = 1 / Math.max(scale, 0.01);

@@ -102,7 +102,6 @@ export type ToolbarHandlers = {
     onNodeCropVideo: (node: CanvasNodeData) => void;
     onNodeDepthCapture: (node: CanvasNodeData) => void;
     onNodeSubtitles: (node: CanvasNodeData) => void;
-    onNodeTimeline: (node: CanvasNodeData) => void;
     onNodeReversePrompt: (node: CanvasNodeData) => void;
     onNodeToggleFreeResize: (node: CanvasNodeData) => void;
     onNodeToggleLocked: (node: CanvasNodeData) => void;
@@ -114,6 +113,8 @@ export type ToolContext = {
     selectedCount: number;
     selectedNodeTypes: Set<CanvasNodeTypeId>;
     selectedVideoCount: number;
+    /** The storyboard planner's explanation, empty only for an eligible selection. */
+    storyboardDisabledReason?: string;
     canvasTool: CanvasToolMode;
     workspaceMode: CanvasWorkspaceMode;
     isProjectLinked: boolean;

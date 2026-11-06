@@ -3,7 +3,7 @@ import { readImageMeta } from "@/lib/image-utils";
 import { IMAGE_FILES_STORE_NAME, localForageInstance } from "@/lib/localforage-storage";
 import { isLocalRuntimeMode } from "@/lib/runtime-mode";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { importResourceFromUrl, isResourceUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
+import { importResourceFromUrl, isResourceUrl, ownedResourceIdFromMediaRef, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
 import { cacheResourceObjectUrl, getCachedResourceBlob, getCachedResourceObjectUrl, primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { usesBrowserLocalResourceStore } from "@/services/workspace-resource-storage";
 import { startOperation } from "@/stores/use-operation-progress";
@@ -48,7 +48,13 @@ export async function uploadImage(input: string | Blob, onProgress?: (uploadedBy
             // Keep the browser-side path as a fallback for CORS-enabled HTTPS images.
         }
     }
-    const blob = typeof input === "string" ? await (await fetch(input)).blob() : input;
+    const blob = typeof input === "string"
+        ? await (async () => {
+              const response = await fetch(input, { credentials: isResourceUrl(input) ? "include" : "same-origin" });
+              if (!response.ok) throw new Error("图片读取失败");
+              return response.blob();
+          })()
+        : input;
     const previewUrl = URL.createObjectURL(blob);
     try {
         const meta = await readImageMeta(previewUrl);
@@ -116,6 +122,16 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
     if (!blob) return fallback;
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
+    return url;
+}
+
+/** Native image elements and canvas decoders cannot attach the desktop token. */
+export async function resolveImageEditSource(storageKey?: string, content = "") {
+    const resourceId = ownedResourceIdFromMediaRef(storageKey, content);
+    const url = resourceId
+        ? await cacheResourceObjectUrl(resourceStorageKey(resourceId))
+        : await resolveImageUrl(storageKey, content);
+    if (!url) throw new Error("无法读取编辑所需的图片");
     return url;
 }
 

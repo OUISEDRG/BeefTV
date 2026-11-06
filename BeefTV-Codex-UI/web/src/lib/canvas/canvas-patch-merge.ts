@@ -1,5 +1,6 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasConnection, CanvasNodeData } from "@/types/canvas";
+import { settleInFlightGenerationOverlay } from "@/lib/canvas/canvas-document-rebase";
 
 type Change<T> = { before: T | null; after: T | null };
 export type CanvasPatch = {
@@ -120,7 +121,10 @@ export function mergeCanvasRefreshPatch(previous: CanvasProject, incoming: Canva
             ...before.filter((item) => !afterIds.has(item.id)).map((item) => ({ before: item, after: null })),
         ];
     };
-    return applyCanvasPatch({ ...previous, nodes, connections }, {
+    // Final polling metadata can arrive before the binding receipt. Settle it
+    // using the same ownership/content rules as the repository before merging.
+    const local = settleInFlightGenerationOverlay({ base: previous, local: { ...previous, nodes, connections }, remote: incoming });
+    return applyCanvasPatch(local, {
         canvasId: previous.id,
         updatedAt: incoming.updatedAt,
         nodes: changes(previous.nodes, incoming.nodes),

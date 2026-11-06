@@ -9,6 +9,7 @@ import (
 	"infinite-canvas/backend/internal/agentops"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/operations"
+	"math"
 	"testing"
 )
 
@@ -19,6 +20,7 @@ func TestBindAssetProjectAuthorizationDoesNotHoldSQLiteConnection(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	// Match the desktop connection pool. A project resolver uses the service's
 	// normal connection and must not be called inside a write transaction.
 	sqlDB.SetMaxOpenConns(1)
@@ -85,6 +87,11 @@ func TestBindAssetProjectAuthorizationDoesNotHoldSQLiteConnection(t *testing.T) 
 
 func TestBindAssetRealCanvasRegistryPermissionsReplayAndUndo(t *testing.T) {
 	svc, canvasID, _ := newAssistantTurnService(t)
+	sqlDB, err := svc.repo.DB().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	var pngBytes bytes.Buffer
 	png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 3, 2)))
 	imageResource, err := svc.UploadResourceFile("local", "reference.png", int64(pngBytes.Len()), "image", 3, 2, 0, bytes.NewReader(pngBytes.Bytes()))
@@ -114,7 +121,7 @@ func TestBindAssetRealCanvasRegistryPermissionsReplayAndUndo(t *testing.T) {
 		if err := svc.repo.DB().Create(&model.Asset{ID: assetID, UserID: "local", Kind: r.Kind, PayloadJSON: string(payload)}).Error; err != nil {
 			t.Fatal(err)
 		}
-		nodes = append(nodes, map[string]any{"id": "node-" + r.Kind, "type": r.Kind, "title": "Reference", "position": map[string]any{"x": 0, "y": 0}, "metadata": map[string]any{"content": "", "custom": "keep", "naturalWidth": 9999, "naturalHeight": 8888, "durationMs": 300000}})
+		nodes = append(nodes, map[string]any{"id": "node-" + r.Kind, "type": r.Kind, "title": "Reference", "position": map[string]any{"x": 17, "y": -23}, "width": 400, "height": 280, "metadata": map[string]any{"content": "", "custom": "keep", "naturalWidth": 9999, "naturalHeight": 8888, "durationMs": 300000}})
 	}
 	doc := map[string]any{"id": canvasID, "title": "Binding", "revision": canvasRevisionOf(t, svc, canvasID), "nodes": nodes, "connections": []any{}}
 	raw, _ := json.Marshal(doc)
@@ -185,8 +192,11 @@ func TestBindAssetRealCanvasRegistryPermissionsReplayAndUndo(t *testing.T) {
 	}
 	var persisted struct {
 		Nodes []struct {
-			Type     string         `json:"type"`
-			Metadata map[string]any `json:"metadata"`
+			Type     string             `json:"type"`
+			Width    float64            `json:"width"`
+			Height   float64            `json:"height"`
+			Position map[string]float64 `json:"position"`
+			Metadata map[string]any     `json:"metadata"`
 		} `json:"nodes"`
 	}
 	if json.Unmarshal(saved, &persisted) != nil {
@@ -194,6 +204,15 @@ func TestBindAssetRealCanvasRegistryPermissionsReplayAndUndo(t *testing.T) {
 	}
 	for _, n := range persisted.Nodes {
 		m := n.Metadata
+		wantHeight := 280.0
+		if n.Type == "image" {
+			wantHeight = 400.0 / 1.5
+		} else if n.Type == "video" {
+			wantHeight = 225
+		}
+		if n.Width != 400 || math.Abs(n.Height-wantHeight) > 0.001 || n.Position["x"] != 17 || n.Position["y"] != -23 {
+			t.Fatalf("binding changed import bounds or explicit coordinates: %+v", n)
+		}
 		if n.Type == "image" && (m["naturalWidth"] != float64(3) || m["naturalHeight"] != float64(2) || m["durationMs"] != nil) {
 			t.Fatalf("stale image metadata: %#v", m)
 		}

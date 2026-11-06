@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,8 +42,22 @@ func normalizeNodeTitle(title string) string {
 
 var canvasCapabilityRegistry = capability.BuiltinRegistry()
 
-// nodePlacementGap 是自动排布时相邻节点的水平间距。
-const nodePlacementGap = 60.0
+// 自动创建的卡片为外置标题预留间距；已有节点的坐标不参与重排。
+const (
+	nodePlacementGap     = 80.0
+	nodePlacementRowGap  = 140.0
+	nodePlacementColumns = 4
+)
+
+func canvasNodePlacementMetrics(doc map[string]any) (float64, float64, float64) {
+	scale := 0.25
+	if viewport, ok := doc["viewport"].(map[string]any); ok {
+		if saved, ok := viewport["k"].(float64); ok && saved > 0 && !math.IsNaN(saved) && !math.IsInf(saved, 0) {
+			scale = math.Max(saved, 0.05)
+		}
+	}
+	return math.Max(nodePlacementGap, 24/scale), math.Max(nodePlacementRowGap, 48/scale), 160 / scale
+}
 
 func canvasDocNodes(doc map[string]any) []any {
 	if nodes, ok := doc["nodes"].([]any); ok {
@@ -140,6 +155,7 @@ func (s *Service) CreateUserCanvasNodes(userID, canvasID string, drafts []NodeDr
 func createCanvasNodes(doc map[string]any, drafts []NodeDraft) ([]CreatedNode, error) {
 	nodes := canvasDocNodes(doc)
 	existingTitles := map[string]bool{}
+	columnGap, rowGap, minTitleWidth := canvasNodePlacementMetrics(doc)
 	cursorX := 120.0
 	for _, rawNode := range nodes {
 		if node, ok := rawNode.(map[string]any); ok {
@@ -155,7 +171,7 @@ func createCanvasNodes(doc map[string]any, drafts []NodeDraft) ([]CreatedNode, e
 					width = descriptor.DefaultWidth
 				}
 			}
-			if right := x + width + nodePlacementGap; right > cursorX {
+			if right := x + math.Max(width, minTitleWidth) + columnGap; right > cursorX {
 				cursorX = right
 			}
 		}
@@ -178,8 +194,9 @@ func createCanvasNodes(doc map[string]any, drafts []NodeDraft) ([]CreatedNode, e
 				"不支持的节点类型: "+draft.Type+"（可用: "+strings.Join(canvasCapabilityRegistry.Types(), "|")+"）")
 		}
 	}
-	// 从既有节点最右边缘开始，再按本批节点的累计宽度推进。
+	// 从既有节点最右边缘开始，只整理本批新增节点。
 	created := make([]CreatedNode, 0, len(drafts))
+	pending := make([]map[string]any, 0, len(drafts))
 	for _, draft := range drafts {
 		descriptor, _ := canvasCapabilityRegistry.Resolve(draft.Type)
 		width, height := descriptor.DefaultWidth, descriptor.DefaultHeight
@@ -194,13 +211,29 @@ func createCanvasNodes(doc map[string]any, drafts []NodeDraft) ([]CreatedNode, e
 			metadata["prompt"] = draft.Prompt
 		}
 		nodeID := newCanvasNodeID()
-		nodes = append(nodes, map[string]any{
+		pending = append(pending, map[string]any{
 			"id": nodeID, "type": draft.Type, "title": draft.Title,
-			"position": map[string]any{"x": cursorX, "y": 160},
-			"width":    width, "height": height, "metadata": metadata,
+			"width": width, "height": height, "metadata": metadata,
 		})
 		created = append(created, CreatedNode{ID: nodeID, Title: draft.Title, Type: draft.Type})
-		cursorX += width + nodePlacementGap
+	}
+	columnWidths := [nodePlacementColumns]float64{}
+	rowHeights := make([]float64, (len(pending)+nodePlacementColumns-1)/nodePlacementColumns)
+	for index, node := range pending {
+		column, row := index%nodePlacementColumns, index/nodePlacementColumns
+		columnWidths[column] = max(columnWidths[column], node["width"].(float64), minTitleWidth)
+		rowHeights[row] = max(rowHeights[row], node["height"].(float64))
+	}
+	x, y := cursorX, 160.0
+	for index, node := range pending {
+		column, row := index%nodePlacementColumns, index/nodePlacementColumns
+		if column == 0 && row > 0 {
+			x = cursorX
+			y += rowHeights[row-1] + rowGap
+		}
+		node["position"] = map[string]any{"x": x, "y": y}
+		nodes = append(nodes, node)
+		x += columnWidths[column] + columnGap
 	}
 	doc["nodes"] = nodes
 	return created, nil

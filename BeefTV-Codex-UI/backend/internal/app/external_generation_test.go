@@ -14,6 +14,7 @@ func externalGenerationFixture(t *testing.T) (*Service, *operations.Registry, st
 	svc, canvasID, _ := newAssistantTurnService(t)
 	sqlDB, _ := svc.Database().DB()
 	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := svc.SaveLocalModelConfig([]byte(`{"imageModel":"custom::qwen-image-2.1","channels":[{"id":"custom","enabled":true,"baseUrl":"https://example.invalid/v1","apiKey":"test-only","models":["qwen-image-2.1"],"modelProfiles":[{"model":"qwen-image-2.1","capability":"image","protocol":"openai-image"}]}]}`)); err != nil {
 		t.Fatal(err)
 	}

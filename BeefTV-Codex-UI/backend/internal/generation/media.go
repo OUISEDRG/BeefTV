@@ -15,6 +15,9 @@ func HydrateMedia(ctx context.Context, userID string, input *Input, policy Media
 	if input == nil {
 		return nil
 	}
+	if err := hydrateDreamaVoiceSamples(ctx, userID, input); err != nil {
+		return err
+	}
 	groups := [][]Media{input.ReferenceImages, input.ReferenceVideos, input.ReferenceAudios}
 	for kind, group := range groups {
 		groupPolicy := mediaPolicyForKind(ctx, *input, []string{"image", "video", "audio"}[kind], policy)

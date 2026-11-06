@@ -7,6 +7,7 @@ import unittest
 import zipfile
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('dreama_release', Path(__file__).with_name('dreama_release.py'))
 release = importlib.util.module_from_spec(spec)
@@ -29,6 +30,90 @@ class ReleaseTests(unittest.TestCase):
             db.execute("insert into local_schema_migrations values(28,'prior-schema','unchanged')")
             db.execute('create table tasks(id text,status text)')
         return package,app,data,bridge,codex,manifest
+
+    def add_installed_member(self, package, root, manifest, area, name, content=b'stable-source'):
+        source=package/area/name;source.parent.mkdir(parents=True,exist_ok=True);source.write_bytes(content)
+        target=root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(content)
+        manifest['files'].append({'area':area,'path':name,'sha256':release.digest(source)})
+        release.write_json(package/'release.json',manifest)
+        return target
+
+    def test_unchanged_bridge_can_keep_running_without_rewriting_its_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            package,app,data,bridge,codex,manifest=self.desktop_fixture(root)
+            bridge_file=self.add_installed_member(package,bridge,manifest,'bridge','server.py')
+            codex_file=self.add_installed_member(package,codex,manifest,'codex','server.py')
+            real_copy=release.shutil.copy2
+            def running_bridge_check(bridge=None):
+                if bridge is not None: raise RuntimeError('Bridge is running')
+            def copy_without_touching_running_sources(source,target,*args,**kwargs):
+                if Path(target) in (bridge_file,codex_file):
+                    self.fail('Unchanged running bridge source must not be rewritten')
+                return real_copy(source,target,*args,**kwargs)
+            with patch.object(release.shutil,'copy2',side_effect=copy_without_touching_running_sources):
+                backup=release.install(package,app,data,bridge,codex,root/'backups',process_check=running_bridge_check)
+            record=json.loads((backup/'record.json').read_text())
+            self.assertTrue(record['completed'])
+            self.assertEqual((app/'BeefTV.exe').read_bytes(),b'new-desktop')
+            self.assertEqual(len(record['files']),3)
+            self.assertEqual([item['path'] for item in record['files'] if item['changed']],['BeefTV.exe'])
+            for item in record['files']:
+                self.assertEqual(release.digest(backup/item['area']/item['path']),item['previousSha256'])
+            self.assertTrue((backup/'open_ai_canvas.db').is_file())
+
+    def test_changed_bridge_still_requires_stopping_before_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            package,app,data,bridge,codex,manifest=self.desktop_fixture(root)
+            target=self.add_installed_member(package,bridge,manifest,'bridge','server.py')
+            target.write_bytes(b'prior-bridge')
+            def running_bridge_check(bridge=None):
+                if bridge is not None: raise RuntimeError('Bridge is running')
+            with self.assertRaisesRegex(RuntimeError,'Bridge is running'):
+                release.install(package,app,data,bridge,codex,root/'backups',process_check=running_bridge_check)
+            self.assertEqual((app/'BeefTV.exe').read_bytes(),b'old-desktop')
+            self.assertEqual(target.read_bytes(),b'prior-bridge')
+            self.assertFalse((root/'backups').exists())
+
+    def test_unchanged_bridge_does_not_bypass_desktop_or_active_work_guards(self):
+        for active in ('desktop','task','bridge'):
+            with self.subTest(active=active), tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                package,app,data,bridge,codex,manifest=self.desktop_fixture(root)
+                self.add_installed_member(package,bridge,manifest,'bridge','server.py')
+                if active=='task':
+                    with closing(sqlite3.connect(data/'open_ai_canvas.db')) as db, db:
+                        db.execute("insert into tasks values('active','running')")
+                if active=='bridge':
+                    with closing(sqlite3.connect(bridge/'state/jobs.sqlite3')) as db, db:
+                        db.execute('create table jobs(result text)')
+                        db.execute('insert into jobs values(?)',(json.dumps({'status':'submitting'}),))
+                def check_desktop(**_):
+                    if active=='desktop': raise RuntimeError('Close BeefTV normally')
+                with self.assertRaisesRegex((RuntimeError,ValueError),'Close BeefTV|active'):
+                    release.install(package,app,data,bridge,codex,root/'backups',process_check=check_desktop)
+                self.assertEqual((app/'BeefTV.exe').read_bytes(),b'old-desktop')
+                self.assertFalse((root/'backups').exists())
+
+    def test_final_verification_checks_unchanged_members_and_preserves_external_changes_on_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            package,app,data,bridge,codex,manifest=self.desktop_fixture(root)
+            target=self.add_installed_member(package,codex,manifest,'codex','server.py')
+            real_copy=release.shutil.copy2
+            def change_untouched_member(source,destination,*args,**kwargs):
+                result=real_copy(source,destination,*args,**kwargs)
+                if Path(source)==package/'app/BeefTV.exe' and Path(destination)==app/'BeefTV.exe':
+                    target.write_bytes(b'external-concurrent-edit')
+                return result
+            with patch.object(release.shutil,'copy2',side_effect=change_untouched_member):
+                with self.assertRaisesRegex(ValueError,'Installed file hash mismatch'):
+                    release.install(package,app,data,bridge,codex,root/'backups',process_check=lambda **_:None)
+            self.assertEqual((app/'BeefTV.exe').read_bytes(),b'old-desktop')
+            self.assertEqual(target.read_bytes(),b'external-concurrent-edit')
+            record=json.loads(next((root/'backups').glob('*/record.json')).read_text())
+            self.assertFalse(record['completed'])
 
     def test_install_refuses_older_or_unknown_desktop_reader_before_replacing_files(self):
         for reader in (28,None,True,'29'):

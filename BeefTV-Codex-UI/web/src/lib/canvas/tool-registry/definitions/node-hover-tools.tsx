@@ -1,4 +1,4 @@
-import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
+import { AudioLines, Captions, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
 
 import { canRecoverOrRetryDepthCapture } from "@/lib/canvas/canvas-depth-capture";
 import { canvasNodeFailureView } from "@/lib/canvas/canvas-node-failure-view";
@@ -26,6 +26,7 @@ function isImageBatchRoot(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx
 function opensSavedHistory(ctx: ToolContext) { return Boolean(ctx.node && canvasNodeFailureView(ctx.node).explanation.category === "result_target_unavailable"); }
 function canRetry(ctx: ToolContext) {
     if (ctx.nodeMetadata?.fileUpload) return false;
+    if (ctx.node && canvasNodeFailureView(ctx.node).canReload) return ctx.nodeMetadata?.status === "error";
     if (opensSavedHistory(ctx)) return ctx.nodeMetadata?.status === "error";
     if (ctx.node && canRecoverOrRetryDepthCapture(ctx.node)) return ctx.nodeMetadata?.status === "error";
     const blocked = Boolean(ctx.node && canvasNodeFailureView(ctx.node).regenerateBlocked);
@@ -69,8 +70,8 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         id: "retry",
         toolbar: "node-hover",
         category: "node-state",
-        label: (ctx) => opensSavedHistory(ctx) ? "从生成历史取回原结果" : ctx.node && canRecoverOrRetryDepthCapture(ctx.node) && ctx.nodeMetadata?.taskStatus === "succeeded" ? "恢复原任务的深度视频" : isImageBatchRoot(ctx) ? "重试批次中的失败图片" : "重新生成",
-        displayLabel: (ctx) => opensSavedHistory(ctx) ? "生成历史" : ctx.node && canRecoverOrRetryDepthCapture(ctx.node) && ctx.nodeMetadata?.taskStatus === "succeeded" ? "恢复结果" : isImageBatchRoot(ctx) ? "重试失败项" : "重试",
+        label: (ctx) => ctx.node && canvasNodeFailureView(ctx.node).canReload ? "继续取回原任务结果" : opensSavedHistory(ctx) ? "从生成历史取回原结果" : ctx.node && canRecoverOrRetryDepthCapture(ctx.node) && ctx.nodeMetadata?.taskStatus === "succeeded" ? "恢复原任务的深度视频" : isImageBatchRoot(ctx) ? "重试批次中的失败图片" : "重新生成",
+        displayLabel: (ctx) => ctx.node && canvasNodeFailureView(ctx.node).canReload ? "继续取回" : opensSavedHistory(ctx) ? "生成历史" : ctx.node && canRecoverOrRetryDepthCapture(ctx.node) && ctx.nodeMetadata?.taskStatus === "succeeded" ? "恢复结果" : isImageBatchRoot(ctx) ? "重试失败项" : "重试",
         icon: <RefreshCw className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 30,
@@ -302,20 +303,6 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         nodeToolbar: { group: "primary", order: 20 },
         applicable: (ctx) => hasVideo(ctx) || hasAudio(ctx),
         run: (ctx) => ctx.handlers.onNodeSubtitles(ctx.node!),
-    },
-    {
-        id: "timeline",
-        workflow: { mode: "manual", reason: "时间线是交互编辑器，可将导出结果作为输入，自动拼接使用视频合并" },
-        toolbar: "node-hover",
-        category: "node-state",
-        label: "时间线编辑",
-        displayLabel: "进入剪辑",
-        icon: <Clapperboard className="size-3.5" />,
-        defaultVisible: true,
-        defaultOrder: 148,
-        nodeToolbar: { group: "workspace", order: 30, section: "项目剪辑", description: "打开项目时间线，定位到当前素材" },
-        applicable: (ctx) => hasVideo(ctx) || hasAudio(ctx),
-        run: (ctx) => ctx.handlers.onNodeTimeline(ctx.node!),
     },
     {
         id: "uploadAudio",

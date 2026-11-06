@@ -7,7 +7,6 @@ import { applyGenerationTaskResultToNodes, applyMaterializedGenerationTaskResult
 import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "@/lib/canvas/canvas-image-batch-retry";
 import { bindMissingCanvasResourceAssets, canvasNodesMissingResourceAssetBinding } from "@/lib/canvas/canvas-node-asset";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
-import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
 import { isDepthCaptureResultNode } from "@/lib/canvas/canvas-depth-capture";
 import { canvasNodeFailureView } from "@/lib/canvas/canvas-node-failure-view";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -119,7 +118,7 @@ export function createImageNodeFromTextSource(input: {
             size: input.config.size,
             quality: input.config.quality,
             transparentBackground: input.config.transparentBackground,
-            count: getGenerationCount(input.config.canvasImageCount || input.config.count || ""),
+            count: 1,
         },
     );
     imageNode.title = "图片生成";

@@ -70,6 +70,55 @@ test("task progress ahead of the server checkpoint still accepts terminal state"
     expect(isCanvasNodeGenerating(result.nodes[0])).toBe(false);
 });
 
+test("editor refresh accepts bound output after the final task poll and retains local edits", () => {
+    const image: CanvasNodeData = { ...node, type: CanvasNodeType.Image };
+    const local = {
+        ...image,
+        position: { x: 700, y: 420 },
+        metadata: {
+            ...image.metadata,
+            taskStatus: "succeeded",
+            taskProgress: 100,
+            taskStage: "任务完成",
+            taskDurationMs: 38053,
+            taskFailureDiagnostics: { version: "v2.1.1", source: "unknown", executionResult: "completed" },
+        },
+    } as CanvasNodeData;
+    const bound: CanvasNodeData = {
+        ...image,
+        title: "保存后的图片",
+        metadata: {
+            ...image.metadata,
+            status: "success",
+            taskStatus: "succeeded",
+            taskProgress: 100,
+            taskStage: null,
+            taskFailureDiagnostics: null,
+            taskDurationMs: 38053,
+            content: "/api/resources/result/file",
+            storageKey: "resource:result",
+        } as CanvasNodeData["metadata"],
+    };
+    const next = { ...image, id: "new-lighting", title: "打光" };
+    const edge = { id: "lighting-input", fromNodeId: image.id, toNodeId: next.id };
+    const previous = { ...project, nodes: [image] };
+    const incoming = { ...project, nodes: [bound] };
+    const result = mergeCanvasRefreshPatch(previous, incoming, [local, next], [edge]);
+    expect(result.nodes[0].metadata?.content).toBe(bound.metadata?.content);
+    expect(result.nodes[0].metadata?.status).toBe("success");
+    expect(result.nodes[0].metadata?.taskStage).toBeNull();
+    expect(result.nodes[0].position).toEqual(local.position);
+    expect(result.nodes[0].title).toBe(bound.title);
+    expect(result.nodes[1]).toBe(next);
+    expect(result.connections).toEqual([edge]);
+
+    const manual = { ...local, metadata: { ...local.metadata, content: "/api/resources/user-image/file" } };
+    expect(() => mergeCanvasRefreshPatch(previous, incoming, [manual], [])).toThrow("冲突");
+    expect(() => mergeCanvasRefreshPatch(previous, incoming, [], [])).toThrow("冲突");
+    const replacement = { ...local, metadata: { ...local.metadata, taskId: "new-task" } };
+    expect(() => mergeCanvasRefreshPatch(previous, incoming, [replacement], [])).toThrow("冲突");
+});
+
 test("full Agent refresh removes unchanged nodes but preserves conflicting local edits", () => {
     const remaining = { ...node, id: "remaining", metadata: {} };
     const previous = { ...project, nodes: [node, remaining] };

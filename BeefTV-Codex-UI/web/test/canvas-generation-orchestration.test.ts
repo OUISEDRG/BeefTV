@@ -122,13 +122,14 @@ describe("createImageNodeFromTextSource", () => {
             prompt: "一座桥",
             nodes: [source],
             connections: [],
-            config: { imageModel: "test-model", size: "720x405" },
+            config: { imageModel: "test-model", size: "720x405", count: "7", canvasImageCount: "4" },
             connectionId: "conn-1",
         });
         expect(created.ok).toBe(true);
         if (!created.ok) return;
         expect(created.imageNode.type).toBe(CanvasNodeType.Image);
         expect(created.imageNode.metadata?.taskId).toBeUndefined();
+        expect(created.imageNode.metadata?.count).toBe(1);
         expect(created.imageNode.metadata?.status).not.toBe("loading");
         expect(created.connection).toEqual({ id: "conn-1", fromNodeId: "text-1", toNodeId: created.imageNode.id });
         expect(created.nextNodes.find((node) => node.id === "text-1")?.metadata?.status).toBe("success");

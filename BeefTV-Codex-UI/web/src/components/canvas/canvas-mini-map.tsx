@@ -21,7 +21,7 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
     const [isDragging, setIsDragging] = useState(false);
     const width = MINIMAP_WIDTH;
     const height = MINIMAP_HEIGHT;
-    const displayNodes = useMemo(() => nodes.filter((node) => !isNodeHiddenByCollapsedFrame(node, nodes)), [nodes]);
+    const displayNodes = useMemo(() => nodes.filter((node) => !node.metadata?.mediaVersionOwnerId && !isNodeHiddenByCollapsedFrame(node, nodes)), [nodes]);
     const showImagePreviews = useMemo(() => displayNodes.filter((node) => node.type === CanvasNodeType.Image && Boolean(getImagePreviewSource(node) || node.metadata?.storageKey)).length <= MINIMAP_IMAGE_PREVIEW_LIMIT, [displayNodes]);
 
     const { worldBounds, scale, offset } = useMemo(() => {

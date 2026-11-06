@@ -6,7 +6,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { ASSET_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
-import { subscribeCanvasGraphicsViewportPreview } from "@/lib/canvas/canvas-live-viewport";
+import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
@@ -22,7 +22,8 @@ import { buildImageToolbarTools, resolveImageToolbarLayout } from "./canvas-imag
 import { NodeDockToolButton, NodeDockMenuButton, compareToolbarTools, type ToolbarTool } from "./canvas-node-dock-tools";
 import { DreamaVoiceBindingButton } from "./canvas-image-voice-dialog";
 import { parseDreamaVoiceBinding } from "@/lib/dreama-voice";
-import { canvasAIUpscaleAvailable, canvasVideoOperationSupport, canvasVideoReversePromptAvailable } from "@/lib/canvas/canvas-provider-capabilities";
+import { canvasAIUpscaleAvailable, canvasVideoOperationSupport, canvasVideoReversePromptAvailable, type CanvasVideoProcessingOperation } from "@/lib/canvas/canvas-provider-capabilities";
+import { canvasVideoProcessingLabels } from "@/lib/canvas/canvas-video-processing";
 
 type CanvasNodeToolbarProps = {
     projectId?: string;
@@ -50,7 +51,7 @@ type CanvasNodeToolbarProps = {
     onUpscale: (node: CanvasNodeData) => void;
     onSuperResolve: (node: CanvasNodeData) => void;
     onDraftToFinal?: (node: CanvasNodeData, resolution: "720p" | "1080p") => void;
-    onVideoEditOperation?: (node: CanvasNodeData, operation: "extend" | "inpaint") => void;
+    onVideoEditOperation?: (node: CanvasNodeData, operation: CanvasVideoProcessingOperation) => void;
     onAngle: (node: CanvasNodeData) => void;
     onLighting: (node: CanvasNodeData) => void;
     onPanorama: (node: CanvasNodeData) => void;
@@ -60,7 +61,6 @@ type CanvasNodeToolbarProps = {
     onTrimVideoSegments: (node: CanvasNodeData) => void;
     onDepthCapture: (node: CanvasNodeData) => void;
     onSubtitles: (node: CanvasNodeData) => void;
-    onTimeline: (node: CanvasNodeData) => void;
     extractingVideoFrames: boolean;
     extractingAudio: boolean;
     trimmingVideo: boolean;
@@ -113,7 +113,6 @@ export function CanvasNodeToolbar({
     onTrimVideoSegments,
     onDepthCapture,
     onSubtitles,
-    onTimeline,
     extractingVideoFrames,
     extractingAudio,
     trimmingVideo,
@@ -151,40 +150,71 @@ export function CanvasNodeToolbar({
             setAnchor(null);
             return;
         }
+        const title = element.querySelector<HTMLElement>(".canvas-node-external-header");
+        const topbar = container.closest("[data-canvas-editor]")?.querySelector<HTMLElement>(".canvas-topbar");
         let disposed = false;
         let queued = false;
         let containerRect = container.getBoundingClientRect();
         let toolbarWidth = toolbarRef.current?.offsetWidth || 0;
         let toolbarHeight = toolbarRef.current?.offsetHeight || 40;
         const update = () => {
+            containerRect = container.getBoundingClientRect();
             const nodeRect = element.getBoundingClientRect();
+            const titleRect = title?.getBoundingClientRect() || nodeRect;
             const preferredLeft = nodeRect.left - containerRect.left + nodeRect.width / 2;
             const halfToolbar = toolbarWidth / 2;
             const canClamp = toolbarWidth > 0 && toolbarWidth <= containerRect.width - 20;
             let left = canClamp ? Math.min(Math.max(preferredLeft, halfToolbar + 10), containerRect.width - halfToolbar - 10) : preferredLeft;
-            const above = nodeRect.top - containerRect.top - 30;
-            let top = Math.max(toolbarHeight + 8, Math.min(above, containerRect.height - 8));
-            // Node-specific panels live inside the canvas container, while the
-            // docked Agent is a sibling overlay. Treat both as occluders so a
-            // toolbar never becomes half-unusable beneath the Agent surface.
-            const occludingPanels = [...Array.from(container.querySelectorAll<HTMLElement>("[data-canvas-node-panel]")), ...Array.from(document.querySelectorAll<HTMLElement>(".canvas-agent-panel"))];
-            for (const panel of occludingPanels) {
-                const panelRect = panel.getBoundingClientRect();
-                const panelLeft = panelRect.left - containerRect.left;
-                const panelRight = panelRect.right - containerRect.left;
-                const panelTop = panelRect.top - containerRect.top;
-                const panelBottom = panelRect.bottom - containerRect.top;
-                if (left + halfToolbar <= panelLeft || left - halfToolbar >= panelRight || top <= panelTop || top - toolbarHeight >= panelBottom) continue;
-                if (panelLeft >= toolbarWidth + 18) left = panelLeft - halfToolbar - 8;
-                else if (containerRect.width - panelRight >= toolbarWidth + 18) left = panelRight + halfToolbar + 8;
-                else if (panelTop >= toolbarHeight + 16) top = panelTop - 8;
-                else if (containerRect.height - panelBottom >= toolbarHeight + 16) top = panelBottom + toolbarHeight + 8;
+            const topInset = topbar ? Math.max(0, topbar.getBoundingClientRect().bottom - containerRect.top) : 0;
+            const above = titleRect.top - containerRect.top - 6;
+            const top = Math.max(topInset + toolbarHeight + 8, Math.min(above, containerRect.height - 8));
+            const panelRoot = container.closest("[data-canvas-editor]") || container;
+            const panels = [...Array.from(panelRoot.querySelectorAll<HTMLElement>("[data-canvas-node-panel]")), ...Array.from(document.querySelectorAll<HTMLElement>(".canvas-agent-panel"))]
+                .map((panel) => panel.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0);
+            const overlapsPanel = (rect: DOMRect, candidateLeft: number) => candidateLeft + halfToolbar > rect.left - containerRect.left
+                && candidateLeft - halfToolbar < rect.right - containerRect.left
+                && top > rect.top - containerRect.top && top - toolbarHeight < rect.bottom - containerRect.top;
+            let panelBlocked = false;
+            for (const rect of panels) {
+                if (!overlapsPanel(rect, left)) continue;
+                // Keep the title's vertical anchor even when an editor or the
+                // Agent covers the node; only use free space beside the panel.
+                const candidates = [rect.left - containerRect.left - halfToolbar - 8, rect.right - containerRect.left + halfToolbar + 8]
+                    .filter((candidate) => candidate >= halfToolbar + 10 && candidate <= containerRect.width - halfToolbar - 10
+                        && panels.every((panel) => !overlapsPanel(panel, candidate)))
+                    .sort((a, b) => Math.abs(a - preferredLeft) - Math.abs(b - preferredLeft));
+                if (!candidates.length) { panelBlocked = true; break; }
+                left = candidates[0];
             }
+            // The toolbar is a sibling of the viewport. Its containing block
+            // can start above the canvas when a guide or workbench is visible.
+            const parent = toolbarRef.current?.offsetParent as HTMLElement | null;
+            const parentRect = parent?.getBoundingClientRect() || containerRect;
+            const position = {
+                left: left + containerRect.left - parentRect.left - (parent?.clientLeft || 0) + (parent?.scrollLeft || 0),
+                top: top + containerRect.top - parentRect.top - (parent?.clientTop || 0) + (parent?.scrollTop || 0),
+            };
             if (toolbarRef.current) {
-                toolbarRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+                const titleOverlaps = titleRect.right > containerRect.left + left - halfToolbar
+                    && titleRect.left < containerRect.left + left + halfToolbar
+                    && titleRect.bottom > containerRect.top + top - toolbarHeight
+                    && titleRect.top < containerRect.top + top;
+                const workbenchRect = topbar?.querySelector<HTMLElement>(".dreama-workbench-panel")?.getBoundingClientRect();
+                const workbenchOverlaps = workbenchRect && workbenchRect.width > 0 && workbenchRect.height > 0
+                    && workbenchRect.right > containerRect.left + left - halfToolbar
+                    && workbenchRect.left < containerRect.left + left + halfToolbar
+                    && workbenchRect.bottom > containerRect.top + top - toolbarHeight
+                    && workbenchRect.top < containerRect.top + top;
+                const nodeVisible = nodeRect.right > containerRect.left && nodeRect.left < containerRect.right
+                    && nodeRect.bottom > containerRect.top + topInset && nodeRect.top < containerRect.bottom;
+                // At the top edge, do not replace the node name or top bar with
+                // a detached toolbar. It returns as soon as there is room.
+                toolbarRef.current.style.visibility = nodeVisible && !panelBlocked && !titleOverlaps && !workbenchOverlaps
+                    && top <= above + 0.5 && top <= containerRect.height - 8 ? "" : "hidden";
+                toolbarRef.current.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
                 return;
             }
-            setAnchor((current) => (current?.left === left && current.top === top ? current : { left, top }));
+            setAnchor((current) => (current?.left === position.left && current.top === position.top ? current : position));
         };
         const scheduleUpdate = () => {
             if (queued || disposed) return;
@@ -204,14 +234,21 @@ export function CanvasNodeToolbar({
         measure();
         const resizeObserver = new ResizeObserver(measure);
         resizeObserver.observe(element);
+        if (title) resizeObserver.observe(title);
+        if (topbar) resizeObserver.observe(topbar);
         resizeObserver.observe(container);
         if (toolbarRef.current) resizeObserver.observe(toolbarRef.current);
+        const topbarObserver = new MutationObserver(scheduleUpdate);
+        if (topbar) topbarObserver.observe(topbar, { childList: true, subtree: true });
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, scheduleUpdate);
+        const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, scheduleUpdate);
         window.addEventListener("resize", measure);
         return () => {
             disposed = true;
             resizeObserver.disconnect();
+            topbarObserver.disconnect();
             unsubscribeViewport();
+            unsubscribeDrag();
             window.removeEventListener("resize", measure);
         };
     }, [anchor === null, containerRef, node, viewport.k, viewport.x, viewport.y]);
@@ -281,7 +318,6 @@ export function CanvasNodeToolbar({
         onNodeReversePrompt: onReversePrompt,
         onNodeToggleFreeResize: onToggleFreeResize,
         onNodeSubtitles: onSubtitles,
-        onNodeTimeline: onTimeline,
         onNodeToggleLocked: onToggleLocked,
         onNodeCopyPrompt: copyImagePrompt,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
@@ -341,17 +377,15 @@ export function CanvasNodeToolbar({
     const utilityTools = inGroup("utility");
     const imageSettingsTools = isImage ? allTools.filter((tool) => tool.id === "replace" || tool.id === "resize" || tool.id === "node-lock") : [];
     const processMenuLabel = compact ? "工具" : isVideo ? "提取素材" : isImage ? "图片工具" : isAudio ? "音频处理" : "文本调整";
-    const videoProcessingTools = [
-        ...registryToolbarTools.filter((tool) => tool.id === "trimRegenerate" || tool.id === "cropVideo" || tool.id === "depthCapture"),
-        ...(narrow ? inGroup("workspace") : []),
-    ];
     const videoAudioTool = registryToolbarTools.find((tool) => tool.id === "extractAudio");
-    const videoEditTools: ToolbarTool[] = onVideoEditOperation ? (["extend", "inpaint"] as const).filter((operation) => canvasVideoOperationSupport(config, node, operation).available).map((operation, index) => ({
-        id: `video-${operation}`, label: operation === "extend" ? "视频续写" : "视频局部修改", icon: null, group: "process", order: index + 1, onClick: () => onVideoEditOperation(node, operation),
+    const videoEditTools: ToolbarTool[] = onVideoEditOperation && (node.metadata?.content || node.metadata?.storageKey) ? (["extend", "upscale", "inpaint"] as const).filter((operation) => canvasVideoOperationSupport(config, node, operation).available).map((operation, index) => ({
+        id: `video-${operation}`, label: canvasVideoProcessingLabels[operation], icon: null, group: "process", order: index + 1, onClick: () => onVideoEditOperation(node, operation),
     })) : [];
-    const videoRemixTools: ToolbarTool[] = [
+    const videoProcessingTools: ToolbarTool[] = [
+        ...registryToolbarTools.filter((tool) => tool.id === "trimRegenerate" || tool.id === "cropVideo" || tool.id === "depthCapture"),
         ...videoEditTools,
-        ...(canvasVideoReversePromptAvailable(config) ? [{ id: "video-reverse-prompt", label: "反推提示词", icon: null, group: "process" as const, order: 3, onClick: () => onReversePrompt(node) }] : []),
+        ...((node.metadata?.content || node.metadata?.storageKey) && canvasVideoReversePromptAvailable(config) ? [{ id: "video-reverse-prompt", label: "反推提示词", icon: null, group: "process" as const, order: 4, onClick: () => onReversePrompt(node) }] : []),
+        ...(narrow ? inGroup("workspace") : []),
     ];
     const videoSubtitleTool = registryToolbarTools.find((tool) => tool.id === "subtitles");
     const videoKeyframeTool = registryToolbarTools.find((tool) => tool.id === "extractFrames");
@@ -387,7 +421,7 @@ export function CanvasNodeToolbar({
         <div
             ref={toolbarRef}
             className="canvas-node-toolbar absolute z-[var(--z-node-toolbar)] -translate-x-1/2 -translate-y-full"
-            style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: "calc(100% - 20px)", color: theme.node.text }}
+            style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: Math.max(0, containerWidth - 20), color: theme.node.text }}
             onMouseEnter={() => onKeep(node.id)}
             onMouseLeave={() => {
                 if (!openMenuId) onLeave();
@@ -401,7 +435,7 @@ export function CanvasNodeToolbar({
                 if (!event.currentTarget.contains(event.relatedTarget) && !openMenuId) onLeave();
             }}
         >
-            <div role="toolbar" aria-label="节点快捷工具" className="flex h-10 max-w-full items-center gap-0.5 overflow-visible rounded-[var(--dock-radius-tight)] px-1.5 backdrop-blur-2xl" style={{ ...dockStyle, border: 0 }}>
+            <div role="toolbar" aria-label="节点快捷工具" data-canvas-wheel-scroll className="thin-scrollbar flex min-h-10 max-w-full items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-[var(--dock-radius-tight)] px-1.5 py-1 backdrop-blur-2xl" style={{ ...dockStyle, border: 0 }}>
                 {isVideo ? (
                     <>
                         {canDraftToFinal && onDraftToFinal ? (
@@ -419,17 +453,6 @@ export function CanvasNodeToolbar({
                             />
                         ) : null}
                         {canAIUpscale ? <NodeDockToolButton tool={{ id: "ai-upscale", label: "AI超分", icon: <UpscaleToolbarIcon />, group: "process", order: 1, onClick: () => onSuperResolve(node) }} showTooltip={false} /> : null}
-                        {videoRemixTools.length > 0 && (node.metadata?.content || node.metadata?.storageKey) ? (
-                            <NodeDockMenuButton
-                                menuId="video-ai-remix"
-                                label="视频二创"
-                                icon={null}
-                                tools={videoRemixTools}
-                                openMenuId={openMenuId}
-                                onOpenChange={handleMenuOpenChange}
-                                placement="bottomLeft"
-                            />
-                        ) : null}
                         {videoProcessingTools.length ? <NodeDockMenuButton menuId="video-processing" label="视频处理" icon={null} tools={videoProcessingTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} placement="bottomLeft" /> : null}
                         {videoAudioTool ? <NodeDockToolButton tool={videoAudioTool} showTooltip={false} /> : null}
                         {videoSubtitleTool ? <NodeDockToolButton tool={videoSubtitleTool} showTooltip={false} /> : null}
@@ -688,7 +711,7 @@ export function CanvasNodeInfoModal({
                                         { code: node.metadata.generationErrorCode || node.metadata.taskErrorCode, message: node.metadata.errorDetails },
                                         { taskId: node.metadata.taskId, model: node.metadata.model, createdAt: node.metadata.taskCreatedAt, stage: node.metadata.taskStage },
                                     )}
-                                    context={{ ...canvasNodeDiagnosticContext(node), model: node.metadata.model, createdAt: node.metadata.taskCreatedAt, stage: node.metadata.taskStage, providerRequestId: node.metadata.taskProviderRequestId, failureDiagnostics: node.metadata.taskFailureDiagnostics, errorSummary: node.metadata.generationErrorSummary, completedAt: node.metadata.taskCompletedAt, updatedAt: node.metadata.taskUpdatedAt }}
+                                    context={{ ...canvasNodeDiagnosticContext(node), model: node.metadata.model, createdAt: node.metadata.taskCreatedAt, stage: node.metadata.taskStage, providerRequestId: node.metadata.taskProviderRequestId, failureDiagnostics: node.metadata.taskFailureDiagnostics, errorSummary: node.metadata.generationErrorSummary, providerCode: node.metadata.generationProviderCode, completedAt: node.metadata.taskCompletedAt, updatedAt: node.metadata.taskUpdatedAt }}
                                 />
                             </section>
                         ) : null}

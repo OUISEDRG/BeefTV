@@ -23,6 +23,8 @@ Wails 和浏览器开发模式共用同一套 `127.0.0.1` HTTP 合同。路由�
 
 ## 合同规则
 
+剧梦人物音色样本在任务输入中仅保存已上传资源标识：`input.metadata.providerOptions[protocol].character_voices` 的每项使用 `{image_index,name,sampleResourceId}`；目录音色继续使用 `{image_index,name,voice_id}`。适用协议为 `dreama-videos-async`、`dreama-extension-async` 和 `dreama-audio-async`。同一项不能同时指定样本和其他音色来源。任务执行时按当前工作区读取资源，校验已就绪、音频类型及不超过 20 MiB 后，才在内存中的上游请求转换为 `audio` 数据；资源标识不会发送到上游，Base64 不回写持久任务。任务创建仍拒绝内嵌图片、视频及音频数据。
+
 `GET /workspace/model-config/voices?channelId=...` 读取已保存、启用的本机音频渠道目录，返回 `data={channelId,voices:[{id,name,source,previewUrl}]}`，`source` 为 `public` 或 `personal`。后端从持久配置取得凭据，固定访问渠道的 `/v1/voices` 路径（Base URL 已以 `/v1` 结尾时不重复追加）；只接受字面回环地址，不接受浏览器指定 URL、Key 或 Header，不跟随重定向。响应字段受大小和格式限制，试听地址仅允许 HTTPS。目录读取及已有样本试听不会生成新音频。`voices_unsupported` 表示渠道无音频目录能力；离线返回 `voices_unavailable`，上游错误与不合格响应分别返回 `voices_upstream_error`、`voices_invalid_response`。
 
 - 无登录、Cookie 会话或租户选择；后端从本地 workspace context 解析唯一 owner。
@@ -185,6 +187,8 @@ MiniMax speech 的 OpenAI 音频兼容目录通过 `audioOptions` 提供官方�
 操作目录还包含 `image.crop`、`image.resize`、`video.crop`、`video.frame`、`video.audio`。裁切使用归一化 `x/y/width/height`；尺寸调整使用 `longEdge` 与可选 `algorithm`；截帧使用 `seconds`。输入端口为 `image` 或 `video`。这些操作派发私有固定配置的 `canvas_media_transform` 本地任务，复用稳定任务操作编号和 `taskId:0` 产物恢复身份。配置只接受结构化参数，原生进程不接受客户端传入的路径或命令。`definition.editorLayoutVersion` 用于编辑器布局升级，运行依赖关系不变。
 
 深度任务继续在 `resultJson.resourceId` 返回结果资源，同时通过标准 `outputs` 提供视频素材及交付状态。历史深度任务也支持结果交付修复；没有记录目标节点的旧任务可通过 `canvas.task.bind` 绑定仍引用该任务的节点。交付暂时失败不会改写任务的成功状态，后台恢复仅重试交付，不重新执行深度处理。
+
+表情编辑和使用选区参考图的局部重绘分别在任务 `metadata.edit` 中记录 `emotion` 和 `mask-guide`。画布读取模型产物，与原图合成后先保存素材，再通过 `canvas.task.bind` 的 `compositeAssetId` 绑定成品。服务端核验素材和资源归属、素材记录的画布/节点/任务身份、原图尺寸，并拒绝模型的原始中间产物；绑定使用原有节点 CAS 和幂等回执，保留节点其他字段。取回优先复用已保存的合成素材，不重新生成或重复上传。未传 `compositeAssetId` 而直接绑定这两类中间产物仍收到 `local_image_composite_required`。
 
 若创建响应丢失，深度节点尚未保存 `taskId`，后台只在画布和目标节点匹配、节点 `taskClientOperationId` 与任务持久化的 `clientOperationId` 一致、节点仍为没有结果的深度视频节点时补上绑定。已有其他任务或素材的节点不会被覆盖。
 

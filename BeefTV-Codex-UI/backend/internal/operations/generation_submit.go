@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -42,9 +43,15 @@ type ExternalGenerationAdmission interface {
 	SubmitExternalGeneration(userID, operationID, canvasID string, targets []GenerationTarget) (any, error)
 }
 
+// The snapshot hash selects the canonical canvas compiler; it never supplies
+// caller-authored prompts, credentials, references or task input.
+type PreparedCanvasGenerationAdmission interface {
+	SubmitPreparedCanvasGeneration(context.Context, string, string, json.RawMessage, []string, string, int64, string) (any, error)
+}
+
 func registerGenerationSubmit(r *Registry) {
 	r.Register(Op{ReplaySafe: true, AssistantCanvas: true, ID: "canvas.generation.submit", Summary: "提交画布素材生成，按所选渠道计费。外部 MCP/CLI 由调用方审批，必填画布与模型配置版本，不需要内置助手确认卡；内置助手仍须已确认的制作授权。返回原任务 ID，重试须复用 operationId", Scope: ScopeCanvas,
-		Params: json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"nodeIds":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":8,"description":"同批必须相互独立且参考已就绪；外部提交只接受尚未关联任务的节点，已有任务用 task.get 查询或原任务恢复入口处理"},"kind":{"type":"string","enum":["image","video","audio"],"description":"可省略以按各节点实际类型提交混合批次"},"expectedRevision":{"type":"integer","minimum":1,"description":"外部调用必填，来自 canvas.get 或生成提议的 source.canvasRevision"},"expectedModelConfigRevision":{"type":"integer","minimum":0,"description":"外部调用必填，来自生成提议的 source.modelConfigRevision"}},"required":["canvasId","nodeIds"]}`), Handler: opGenerationSubmit})
+		Params: json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"nodeIds":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":8,"description":"同批必须相互独立且参考已就绪；外部提交只接受尚未关联任务的节点，已有任务用 task.get 查询或原任务恢复入口处理"},"kind":{"type":"string","enum":["image","video","audio"],"description":"可省略以按各节点实际类型提交混合批次"},"expectedRevision":{"type":"integer","minimum":1,"description":"外部调用必填，来自 canvas.get 或生成提议的 source.canvasRevision"},"expectedModelConfigRevision":{"type":"integer","minimum":0,"description":"外部调用必填，来自生成提议的 source.modelConfigRevision"},"expectedSnapshotHash":{"type":"string","minLength":64,"maxLength":64,"description":"剧梦视频必填 canvas.generation.prepare 返回的 snapshotHash；服务端重新编译并核对后，使用同一任务入口提交"}},"required":["canvasId","nodeIds"]}`), Handler: opGenerationSubmit})
 }
 
 func opGenerationSubmit(ctx *Context, raw json.RawMessage) (any, error) {
@@ -54,6 +61,7 @@ func opGenerationSubmit(ctx *Context, raw json.RawMessage) (any, error) {
 		Kind                        string   `json:"kind"`
 		ExpectedRevision            *int64   `json:"expectedRevision"`
 		ExpectedModelConfigRevision *int64   `json:"expectedModelConfigRevision"`
+		ExpectedSnapshotHash        string   `json:"expectedSnapshotHash"`
 	}
 	if err := decodeParams(raw, &args); err != nil {
 		return nil, err
@@ -78,6 +86,27 @@ func opGenerationSubmit(ctx *Context, raw json.RawMessage) (any, error) {
 	}
 	if external && canvasRevision(doc) != *args.ExpectedRevision {
 		return nil, Conflict("revision_conflict", "画布已变化，请重新读取并确认生成内容", nil)
+	}
+	if args.ExpectedSnapshotHash != "" {
+		if !external {
+			return nil, PermissionDenied("production_authorization_required", "此入口由外部调用方授权，内置助手仍使用制作确认")
+		}
+		seen := map[string]bool{}
+		for _, id := range args.NodeIDs {
+			if strings.TrimSpace(id) == "" || seen[id] {
+				return nil, InvalidArg("invalid_batch", "生成节点 ID 不能为空或重复")
+			}
+			seen[id] = true
+		}
+		port, ok := ctx.Domain.(PreparedCanvasGenerationAdmission)
+		if !ok {
+			return nil, Unsupported("generation_unavailable", "当前工作区不能提交已编译画布")
+		}
+		requestContext := ctx.Context
+		if requestContext == nil {
+			requestContext = context.Background()
+		}
+		return port.SubmitPreparedCanvasGeneration(requestContext, ctx.UserID, ctx.OperationID, docRaw, args.NodeIDs, args.Kind, *args.ExpectedModelConfigRevision, args.ExpectedSnapshotHash)
 	}
 	targets, err := GenerationTargets(ctx.Domain, doc, args.NodeIDs)
 	if err != nil {

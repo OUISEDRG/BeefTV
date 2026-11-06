@@ -3,6 +3,8 @@ import { canvasNodeFailureView } from "@/lib/canvas/canvas-node-failure-view";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import { recoverCanvasGenerationTaskNode } from "@/pages/canvas/use-canvas-generation";
 import { attachNodeEffectKey } from "@/services/generation-task-materializer";
+import { canvasGenerationFailureMetadata } from "@/pages/canvas/canvas-generation-failure";
+import { CanvasGenerationDurableAckError } from "@/services/canvas-generation-errors";
 import type { GenerationTask } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { SetStateAction } from "react";
@@ -40,6 +42,37 @@ async function recover(node: CanvasNodeData, task = completed, current = node) {
 }
 
 describe("completed canvas result state reconciliation", () => {
+    test("a ready backend result with a failed empty canvas card is recovered in place", async () => {
+        const node = attachedNode();
+        node.metadata = {
+            ...node.metadata, status: "error", content: undefined, storageKey: undefined, assetId: undefined,
+            taskOutcome: completed.outcome, generationEffectKeys: undefined,
+            errorDetails: "生成结果已保留，画布尚未更新",
+        };
+        const failure = canvasNodeFailureView(node);
+        expect(failure.outcome).toEqual(completed.outcome);
+        expect(failure.canReload).toBe(true);
+        expect(failure.retryBlocked).toBe(true);
+        const result = await recover(node);
+        expect(result.consumeCalls).toBe(1);
+        expect(result.node.id).toBe(node.id);
+        const displayed = { ...node, metadata: { ...node.metadata, status: "success" as const, storageKey: "resource:attached" } };
+        expect(canvasNodeFailureView(displayed).canReload).toBe(false);
+    });
+
+    test("a failed local image delivery keeps its original task and blocks regeneration", () => {
+        const node = attachedNode();
+        node.metadata = {
+            ...node.metadata, status: "error", content: undefined, storageKey: undefined,
+            ...canvasGenerationFailureMetadata(new CanvasGenerationDurableAckError(new Error("asset confirmation failed")), { mode: "image", prompt: "change expression" }),
+        };
+        const failure = canvasNodeFailureView(node);
+        expect(node.metadata.taskId).toBe(completed.id);
+        expect(failure.canReload).toBe(true);
+        expect(failure.retryBlocked).toBe(true);
+        expect(failure.regenerateBlocked).toBe(true);
+    });
+
     test("an attached successful video with a stale running outcome is selected for task reconciliation", () => {
         const node = attachedNode();
         expect(isCanvasNodeGenerating(node, null)).toBe(true);

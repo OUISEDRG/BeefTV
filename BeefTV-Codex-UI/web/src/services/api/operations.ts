@@ -138,6 +138,7 @@ export async function bindCanvasTaskOutput(input: {
     taskId: string;
     nodeId: string;
     outputIndex?: number;
+    compositeAssetId?: string;
     signal?: AbortSignal;
     traceId?: string;
 }) {
@@ -150,6 +151,7 @@ export async function bindCanvasTaskOutput(input: {
                 taskId: input.taskId,
                 nodeId: input.nodeId,
                 outputIndex: input.outputIndex ?? 0,
+                ...(input.compositeAssetId ? { compositeAssetId: input.compositeAssetId } : {}),
             },
         },
         input.signal,

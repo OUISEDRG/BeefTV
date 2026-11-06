@@ -241,6 +241,10 @@ type MessageBindTarget struct {
 }
 
 func CanvasBindTargets(task model.Task, intents []CanvasBindingIntent) []CanvasBindTarget {
+	// Check the persisted request as existing output intents can predate local compositing.
+	if task.Type == "canvas_image" && len(intents) > 0 && TargetBindingFromInput(task.InputJSON).RequiresImageComposite {
+		return nil
+	}
 	seen := map[string]bool{}
 	targets := make([]CanvasBindTarget, 0, len(intents)+1)
 	add := func(nodeID string, outputIndex int) {

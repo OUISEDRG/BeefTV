@@ -3,6 +3,7 @@ import { createCanvasPageUiStore } from "../../src/stores/canvas/use-canvas-page
 import { useCanvasStore } from "../../src/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasConnection } from "../../src/types/canvas";
 import { defaultModelCapabilityConfig } from "../../src/lib/model-capabilities";
+import { selectCanvasMediaVersion } from "../../src/lib/canvas/canvas-media-version-selection";
 const react = await import("react");
 const configuration = await import("../../src/stores/use-config-store");
 const generation = await import("../../src/lib/canvas/canvas-project-generation");
@@ -106,15 +107,18 @@ function setup(native = false) {
     const run = setup();
     await run.generate("root", "image", run.root.metadata!.composerContent!);
     const completed = run.child()[0]!;
-    const nextTool = createImageToolGenerationNode({ source: completed, id: "next-tool", title: "新视角", kind: "angle", instruction: "转向右侧", config });
+    run.nodesRef.current = selectCanvasMediaVersion(run.nodesRef.current, completed.id);
+    const selected = run.nodesRef.current.find(node => node.id === "root")!;
+    expect(selected.metadata?.content).toBe(completed.metadata?.content);
+    const nextTool = createImageToolGenerationNode({ source: selected, id: "next-tool", title: "新视角", kind: "angle", instruction: "转向右侧", config });
     expect(nextTool.parentId).toBe("episode");
     run.nodesRef.current = [...run.nodesRef.current, nextTool];
-    run.connectionsRef.current = [...run.connectionsRef.current, { id: "next-ref", fromNodeId: completed.id, toNodeId: nextTool.id }];
+    run.connectionsRef.current = [...run.connectionsRef.current, { id: "next-ref", fromNodeId: selected.id, toNodeId: nextTool.id }];
     await run.generate(nextTool.id, "image", nextTool.metadata!.composerContent!);
     expect(errors).toEqual([]);
     expect(requests).toHaveLength(3);
     expect(requests[2].metadata.providerOptions.dreama.seriesId).toBe(22);
-    expect(requests[2].referenceImages.map((ref: any) => ref.id)).toEqual([completed.id]);
+    expect(requests[2].referenceImages.map((ref: any) => ref.id)).toEqual([selected.id]);
     console.log("PASS: completed batch outputs retain their parent episode when used by the next tool");
 }
 

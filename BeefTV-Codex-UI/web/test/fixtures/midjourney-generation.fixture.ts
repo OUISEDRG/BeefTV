@@ -94,8 +94,8 @@ for (scenario of ["success", "bind-failed", "unknown", "cancel-after-accept", "c
     assert.equal(new Set(operationIds).size, submissions, "each native batch must own a distinct submission operation");
     assert.equal(new Set(outputIds).size, submissions * 4, "native batches must not share output targets");
     const children = nodesRef.current.filter((node) => node.metadata?.batchRootId);
-    assert.equal(children.length, total);
-    assert.deepEqual(children.map((node) => node.metadata!.taskOutputIndex), Array.from({ length: total }, (_, index) => index % 4));
+    assert.equal(children.length, scenario.includes("cancel") ? submissions * 4 : total, "cancellation retains submitted targets and removes never-submitted versions");
+    assert.deepEqual(children.map((node) => node.metadata!.taskOutputIndex), Array.from({ length: children.length }, (_, index) => index % 4));
     if (!scenario.includes("cancel")) assert.equal(new Set(children.map((node) => node.metadata!.taskClientOperationId)).size, total / 4);
     if (scenario === "unknown" || scenario === "cancel-before-accept") {
         assert.ok(children.every((node) => readNodeTaskOutcome(node.metadata)?.phase === "retrievable"));

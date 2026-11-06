@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 import { nanoid } from "nanoid";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
-import { canvasVideoOperationSupport } from "@/lib/canvas/canvas-provider-capabilities";
+import { canvasVideoOperationSupport, type CanvasVideoProcessingOperation } from "@/lib/canvas/canvas-provider-capabilities";
+import { createCanvasVideoProcessingDraft } from "@/lib/canvas/canvas-video-processing";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 
 import { promoteLegacyBatchTableSize } from "@/lib/canvas/canvas-batch-table";
@@ -299,6 +300,16 @@ export function useCanvasGenerationOrchestration({
             if (blocked) message.warning("部分图片需要先处理失败原因，请打开对应节点查看");
             if (!retryable.length) return;
             const root = nodesRef.current.find((node) => node.id === rootId);
+            if (root?.metadata?.imageBatchAsVersions) {
+                void (async () => {
+                    for (const child of retryable) {
+                        if (projectIdRef.current !== projectId) return;
+                        await handleRetryNode(child);
+                    }
+                    reconcileImageBatchRootNode(rootId);
+                })();
+                return;
+            }
             if (root) {
                 const config = buildGenerationConfig(effectiveConfig, root, "image");
                 if (modelCapabilityConfigFor(config, config.model).image?.fixedOutputs) {
@@ -324,7 +335,7 @@ export function useCanvasGenerationOrchestration({
                 reconcile: reconcileImageBatchRootNode,
             });
         },
-        [effectiveConfig, handleRetryNode, message, nodesRef, reconcileImageBatchRootNode, setNodes],
+        [effectiveConfig, handleRetryNode, message, nodesRef, projectId, reconcileImageBatchRootNode, setNodes],
     );
 
     const generateImageFromTextNode = useCallback(
@@ -410,42 +421,13 @@ export function useCanvasGenerationOrchestration({
     );
 
     const createVideoEditNodeFromVideo = useCallback(
-        (node: CanvasNodeData, operation: "extend" | "inpaint") => {
-            const support = canvasVideoOperationSupport(effectiveConfig, node, operation);
-            if (!support.available) { message.warning(support.reason); return; }
-            if (!node.metadata?.content && !node.metadata?.storageKey) {
-                message.warning("视频节点为空，无法发起视频二创");
-                return;
-            }
-            const label = operation === "extend" ? "视频续写" : "视频局部修改";
-            const defaultPrompt = operation === "extend"
-                ? `基于 @视频1 自然顺延后续动作、镜头运动与环境氛围，保持人物与画风一致`
-                : `基于 @视频1 进行画面修改：保持原有构图与节奏，将主体调整为 `;
-            const childNode: CanvasNodeData = {
-                id: nanoid(),
-                type: CanvasNodeType.Video,
-                title: `${node.title || "视频"} · ${label}`.slice(0, 36),
-                parentId: node.parentId,
-                position: { x: node.position.x + node.width + 96, y: node.position.y },
-                width: node.width,
-                height: node.height,
-                metadata: {
-                    status: "idle",
-                    prompt: defaultPrompt,
-                    composerContent: defaultPrompt,
-                    model: support.model,
-                    size: "adaptive",
-                    seconds: node.metadata?.seconds,
-                    vquality: node.metadata?.vquality || "720p",
-                    generateAudio: node.metadata?.generateAudio ?? "true",
-                    watermark: node.metadata?.watermark ?? "false",
-                    draft: "false",
-                    videoEditOperation: operation,
-                    generatedFromNodeId: node.id,
-                },
-            };
+        (node: CanvasNodeData, operation: CanvasVideoProcessingOperation) => {
+            let draft: ReturnType<typeof createCanvasVideoProcessingDraft>;
+            try { draft = createCanvasVideoProcessingDraft(effectiveConfig, node, operation); }
+            catch (error) { message.warning(error instanceof Error ? error.message : "无法创建视频处理节点"); return; }
+            const childNode = draft.node;
             const nextNodes = [...nodesRef.current, childNode];
-            const nextConnections = [...connectionsRef.current, { id: nanoid(), fromNodeId: node.id, toNodeId: childNode.id }];
+            const nextConnections = [...connectionsRef.current, draft.connection];
             nodesRef.current = nextNodes;
             connectionsRef.current = nextConnections;
             setNodes(nextNodes);

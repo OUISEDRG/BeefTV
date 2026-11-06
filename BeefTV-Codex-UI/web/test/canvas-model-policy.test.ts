@@ -352,6 +352,44 @@ describe("逻辑模型选择", () => {
 });
 
 describe("画布连线能力", () => {
+    test("普通多视频参考采用目标模型容量，延长仍采用单个原视频限制", () => {
+        const config = policyConfig();
+        const profile = config.channels[0].modelProfiles![0].capabilityConfig!.video!;
+        profile.references.maxVideos = 10;
+        profile.operationReferences = { reference_to_video: { maxVideos: 10 }, extend: { maxVideos: 1 } };
+        const target = { ...node("target", CanvasNodeType.Video), metadata: { model: "relay::cinema-text" } };
+        const sources = Array.from({ length: 11 }, (_, index) => node(`video-${index}`, CanvasNodeType.Video));
+        const nodes = [...sources, target];
+        const connections = sources.slice(0, 9).map(source => ({ id: source.id, fromNodeId: source.id, toNodeId: target.id }));
+        expect(canvasConnectionError(config, nodes, connections, { fromNodeId: sources[9].id, toNodeId: target.id })).toBe("");
+        connections.push({ id: sources[9].id, fromNodeId: sources[9].id, toNodeId: target.id });
+        expect(canvasConnectionError(config, nodes, connections, { fromNodeId: sources[10].id, toNodeId: target.id })).toContain("当前模型在此模式下最多支持 10 个参考视频");
+        target.metadata = { ...target.metadata, videoEditOperation: "extend" } as typeof target.metadata;
+        expect(canvasConnectionError(config, nodes, connections.slice(0, 1), { fromNodeId: sources[1].id, toNodeId: target.id })).toContain("最多支持 1 个参考视频");
+    });
+
+    test("其它模型支持音频不能覆盖目标模型的接入限制", () => {
+        const config = policyConfig();
+        config.channels[0].modelProfiles![0].displayName = "仅文本模型";
+        const nodes = [node("audio", CanvasNodeType.Audio), node("target", CanvasNodeType.Video)];
+        const error = canvasConnectionError(config, nodes, [], { fromNodeId: "audio", toNodeId: "target" });
+        expect(error).toContain("当前模型在此模式下的接入配置未开放参考音频");
+        expect(error).not.toContain("已配置模型均不支持");
+        nodes[1].metadata = { model: "relay::cinema-audio" };
+        expect(canvasConnectionError(config, nodes, [], { fromNodeId: "audio", toNodeId: "target" })).toBe("");
+    });
+
+    test("独立音频按目标操作限制检查，保留普通生成与延长的区别", () => {
+        const config = policyConfig();
+        const profile = config.channels[0].modelProfiles![2].capabilityConfig!.video!;
+        profile.operationReferences = { extend: { maxAudios: 0 }, audio_to_video: { maxAudios: 1 } };
+        const target = { ...node("target", CanvasNodeType.Video), metadata: { model: "relay::cinema-audio", videoEditOperation: "extend" as const } };
+        const nodes = [node("audio", CanvasNodeType.Audio), target];
+        expect(canvasConnectionError(config, nodes, [], { fromNodeId: "audio", toNodeId: "target" })).toContain("接入配置未开放参考音频");
+        delete (target.metadata as Partial<typeof target.metadata>).videoEditOperation;
+        expect(canvasConnectionError(config, nodes, [], { fromNodeId: "audio", toNodeId: "target" })).toBe("");
+    });
+
     test("超过所有视频模型的参考图上限时拒绝连线", () => {
         const config = policyConfig();
         const nodes = [node("image-a", CanvasNodeType.Image), node("image-b", CanvasNodeType.Image), node("target", CanvasNodeType.Config, "video")];

@@ -98,6 +98,11 @@ const GENERATION_ERROR_METADATA_KEYS = [
     "errorDetails",
     "generationErrorCode",
     "generationErrorSummary",
+    "generationProviderCode",
+    "taskFailureDiagnostics",
+    "generationFailure",
+    "generationPreflightError",
+    "taskOutcomeSource",
     "failedPromptFingerprint",
     "failedInputFingerprint",
     "processingLabel",
@@ -118,9 +123,19 @@ function nonemptyMediaRef(value: unknown): value is string {
     return typeof value === "string" && value.trim().length > 0;
 }
 
+function hasInFlightTaskOutcome(value: unknown) {
+    if (!isPlainObject(value)) return false;
+    return value.phase === "running" || value.phase === "fetching";
+}
+
 function isInFlightGenerationOverlay(node: CanvasNodeData) {
     const status = node.metadata?.status;
-    return status === "loading" || status === "error";
+    if (status === "loading" || status === "error") return true;
+    return (
+        status === "success"
+        && (!node.metadata?.taskStatus || node.metadata.taskStatus === "succeeded")
+        && hasInFlightTaskOutcome(node.metadata?.taskOutcome)
+    );
 }
 
 function remoteHasBoundGenerationResult(node: CanvasNodeData | undefined) {
@@ -157,11 +172,17 @@ export function settleInFlightGenerationOverlay(input: {
     const nodes = (input.local.nodes || []).map((localNode) => {
         const remoteNode = remoteById.get(localNode.id);
         const taskId = nodeTaskId(localNode);
-        if (!remoteNode || !taskId || nodeTaskId(remoteNode) !== taskId) return localNode;
-        if (!isInFlightGenerationOverlay(localNode) || !remoteHasBoundGenerationResult(remoteNode)) return localNode;
+        if (!remoteNode || !taskId || nodeTaskId(remoteNode) !== taskId || !remoteHasBoundGenerationResult(remoteNode)) return localNode;
+        const remoteMeta = remoteNode.metadata || {};
+        // Date.parse truncates each timestamp to milliseconds. The server subtracts
+        // before truncating, so its duration can differ from the final poll by 1 ms.
+        if (typeof remoteMeta.taskDurationMs === "number" && remoteMeta.taskDurationMs !== localNode.metadata?.taskDurationMs) {
+            localNode = { ...localNode, metadata: { ...localNode.metadata, taskDurationMs: remoteMeta.taskDurationMs } };
+            changed = true;
+        }
+        if (!isInFlightGenerationOverlay(localNode)) return localNode;
         if (hasTrueGenerationContentConflict(baseById.get(localNode.id), localNode, remoteNode)) return localNode;
         const metadata: CanvasNodeData["metadata"] = { ...(localNode.metadata || {}) };
-        const remoteMeta = remoteNode.metadata || {};
         for (const key of GENERATION_BIND_METADATA_KEYS) {
             if (GENERATION_MEDIA_RESULT_KEY_SET.has(key)) {
                 const value = remoteMeta[key];
@@ -178,6 +199,9 @@ export function settleInFlightGenerationOverlay(input: {
         }
         for (const key of GENERATION_ERROR_METADATA_KEYS) {
             delete (metadata as Record<string, unknown>)[key];
+        }
+        if (!isPlainObject(metadata.taskOutcome) || hasInFlightTaskOutcome(metadata.taskOutcome)) {
+            metadata.taskOutcome = { phase: "ready", regenerate: "allowed", reason: "result_ready" };
         }
         changed = true;
         return { ...localNode, metadata };

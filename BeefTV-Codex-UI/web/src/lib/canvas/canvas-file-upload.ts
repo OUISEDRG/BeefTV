@@ -37,15 +37,50 @@ export async function createFileUploadPlaceholder(id: string, file: File, positi
 // 不使用 readImageMeta 的默认尺寸兜底：上传占位必须来自实际解码尺寸。
 export async function readUploadImageSize(file: File): Promise<{ width: number; height: number }> {
     const url = URL.createObjectURL(file);
-    const image = new Image();
     try {
-        image.src = url;
-        await image.decode();
-        if (!image.naturalWidth || !image.naturalHeight) throw new Error("无法读取图片尺寸，请重新选择图片");
-        return { width: image.naturalWidth, height: image.naturalHeight };
+        return await readImageSourceSize(url);
     } finally {
         URL.revokeObjectURL(url);
     }
+}
+
+export async function readImageSourceSize(url: string): Promise<{ width: number; height: number }> {
+    if (!url) throw new Error("素材图片地址不可用");
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error("无法读取图片尺寸，请重新选择图片");
+    return { width: image.naturalWidth, height: image.naturalHeight };
+}
+
+/** Do not let a slow upload overwrite geometry the user changed while it was in flight. */
+export function fitCanvasUploadedVideoNode(current: CanvasNodeData, placeholder: CanvasNodeData, naturalWidth: number, naturalHeight: number): CanvasNodeData {
+    if (current.metadata?.manualSize || current.metadata?.freeResize || current.metadata?.locked || current.metadata?.workflowSlot) return current;
+    if (![naturalWidth, naturalHeight].every((value) => Number.isFinite(value) && value > 0)) return current;
+    const same = (a: number, b: number) => Math.abs(a - b) < 0.01;
+    if (!same(current.position.x, placeholder.position.x) || !same(current.position.y, placeholder.position.y)
+        || !same(current.width, placeholder.width) || !same(current.height, placeholder.height)) return current;
+    const size = fitNodeSize(naturalWidth, naturalHeight);
+    return { ...current, ...size, position: {
+        x: current.position.x + (current.width - size.width) / 2,
+        y: current.position.y + (current.height - size.height) / 2,
+    } };
+}
+
+/** Server video metadata can resize a placeholder around its center. User edits take precedence. */
+export function canRelayoutCanvasUploadBatch(prepared: CanvasNodeData[], current: CanvasNodeData[]) {
+    const byId = new Map(current.map((node) => [node.id, node]));
+    const same = (a: number, b: number) => Math.abs(a - b) < 0.01;
+    return prepared.every((before) => {
+        const after = byId.get(before.id);
+        if (!after || after.metadata?.locked || after.metadata?.manualSize || after.metadata?.freeResize || after.metadata?.workflowSlot) return false;
+        if (after.type === CanvasNodeType.Video && after.metadata?.naturalWidth && after.metadata?.naturalHeight) {
+            return same(before.position.x + before.width / 2, after.position.x + after.width / 2)
+                && same(before.position.y + before.height / 2, after.position.y + after.height / 2);
+        }
+        return same(before.position.x, after.position.x) && same(before.position.y, after.position.y)
+            && same(before.width, after.width) && same(before.height, after.height);
+    });
 }
 
 export function createImageUploadPlaceholder(id: string, file: Pick<File, "name" | "size" | "type">, position: Position, naturalSize: { width: number; height: number }): CanvasNodeData {

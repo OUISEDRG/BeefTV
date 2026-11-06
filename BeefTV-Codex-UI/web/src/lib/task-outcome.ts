@@ -286,6 +286,9 @@ export function canReloadCanvasNodeResource(target?: { metadata?: CanvasNodeOutc
     if (!metadata.taskId) return false;
     const outcome = readNodeTaskOutcome(metadata);
     if (!outcome) return false;
+    // The backend result can be ready while its canvas attachment failed.
+    // Keep the authoritative task outcome and offer that same result again.
+    if (outcome.phase === "ready" && metadata.status === "error" && !metadata.content && !metadata.storageKey) return true;
     if (normalizeTaskOutcome(metadata.taskOutcome)) {
         return outcome.phase === "retrievable";
     }

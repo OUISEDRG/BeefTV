@@ -1245,10 +1245,10 @@ const EXPECTED: Array<{ name: string } & CanvasNodeFailureView> = [
             "blockManualRetry": false,
             "moderation": false
         },
-        "retryBlocked": false,
+        "retryBlocked": true,
         "regenerateBlocked": false,
         "regenerateConfirm": false,
-        "canReload": false,
+        "canReload": true,
         "needsRecovery": true,
         "recoveryRoute": "single",
         "cardSubmissionUncertain": false,

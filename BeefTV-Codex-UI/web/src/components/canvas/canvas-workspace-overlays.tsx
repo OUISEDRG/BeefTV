@@ -16,6 +16,7 @@ export type PendingConnectionCreate = {
     position: Position;
     quick?: boolean;
     batchSourceNodeIds?: string[];
+    groupSourceNodeId?: string;
 };
 
 export function CanvasSelectionToolbar({ anchorRef, containerRef, count, children }: { anchorRef: RefObject<HTMLDivElement | null>; containerRef: RefObject<HTMLDivElement | null>; count: number; children: ReactNode }) {
@@ -217,7 +218,7 @@ export function CanvasConnectionCreateMenu({ pending, viewport, viewportSize, co
             onFocusCapture={bringToFront}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            <CanvasCreateMenu commands={commands} layout="list" title="引用该节点生成" showSearch={false} showSectionTitles={false} showResources={false} />
+            <CanvasCreateMenu commands={commands} layout="list" title={pending.groupSourceNodeId ? "引用整组素材生成" : "引用该节点生成"} showSearch={false} showSectionTitles={false} showResources={false} />
         </motion.div>
     );
 }

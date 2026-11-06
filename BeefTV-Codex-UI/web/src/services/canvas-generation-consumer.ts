@@ -9,12 +9,15 @@ import { CanvasBackendSubmitPausedError, isCanvasRevisionConflict } from "@/serv
 import { generationEffectApplied } from "@/services/generation-consumer-dedupe";
 import { attachNodeEffectKey } from "@/services/generation-task-materializer";
 import { persistCanvasDocument } from "@/services/local-workspace-repository";
-import { hydrateBackendGeneratedOutputs, type ensureCanvasNodeAsset } from "@/services/project-asset-sync";
+import { hydrateBackendGeneratedOutputs, ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { publishGenerationDeliveryProgress } from "@/stores/use-generation-delivery-progress";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasConnection, CanvasNodeData } from "@/types/canvas";
 import { recordCanvasBindingDiagnostic } from "@/services/diagnostics/canvas-binding-diagnostics";
+import { reconcileCanvasImageVersionBatches } from "@/lib/canvas/canvas-image-version-batch";
+import { applyRecoveredGenerationTaskResultToNodes } from "@/lib/canvas/canvas-generation-task-sync";
+import { findSavedCanvasComposite } from "./canvas-composite-asset";
 
 function throwIfAborted(signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
@@ -75,6 +78,7 @@ type SleepWithSignal = (ms: number, signal?: AbortSignal) => Promise<void>;
 export type BindBackendCanvasGenerationRuntime = {
     hydrateOutputs?: typeof hydrateBackendGeneratedOutputs;
     ensureNodeAsset?: typeof ensureCanvasNodeAsset;
+    findCompositeAsset?: typeof findSavedCanvasComposite;
     persistDocument?: PersistCanvasDocumentPatch;
     bindOutput?: typeof bindCanvasTaskOutput;
     adoptConfirmedProjection?: AdoptServerConfirmedProjection;
@@ -232,6 +236,10 @@ export async function bindBackendCanvasGenerationResult(input: {
     // hydration or persistence. Check again before dispatching a durable bind.
     const assertNodeOwnership = () => {
         if (input.isNodeOwned && !input.isNodeOwned()) throw new DOMException("The node belongs to a newer request", "AbortError");
+        if (compositeAssetId && (!input.isCurrent() || input.signal?.aborted ||
+            !input.nodesRef.current.some(node => node.id === input.nodeId && node.metadata?.taskId === input.task.id))) {
+            throw new DOMException("The local edit target was replaced", "AbortError");
+        }
     };
 
     const waitForMaterialization = (task: GenerationTask, forceRefresh = false) =>
@@ -258,7 +266,30 @@ export async function bindBackendCanvasGenerationResult(input: {
     }
     input.onPhaseChange?.("saving");
 
-    await hydrateOutputs(task, input.signal, {
+    const target = input.nodesRef.current.find(node => node.id === input.nodeId);
+    let compositeAssetId: string | undefined;
+    if (target?.metadata?.emotionEdit || target?.metadata?.maskEdit?.useGuide) {
+        const owns = () => input.isCurrent() && !input.signal?.aborted && (!input.isNodeOwned || input.isNodeOwned()) &&
+            input.nodesRef.current.some(node => node.id === input.nodeId && node.metadata?.taskId === task.id);
+        if (!owns()) throw new DOMException("The operation was aborted", "AbortError");
+        const saved = await (runtime.findCompositeAsset ?? findSavedCanvasComposite)({ canvasId: capturedCanvasId,
+            nodeId: input.nodeId, taskId: task.id, rawAssetId: generationTaskOutput(task, outputIndex)?.materializedAssetId, signal: input.signal });
+        if (!owns()) throw new DOMException("The operation was aborted", "AbortError");
+        compositeAssetId = saved?.id;
+        if (!compositeAssetId) {
+            if (!task.resultJson) task = await refreshTask(task.id, { signal: input.signal });
+            const applied = await applyRecoveredGenerationTaskResultToNodes(input.nodesRef.current, task, input.nodeId);
+            if (!applied.node || !owns()) throw new DOMException("The operation was aborted", "AbortError");
+            const project = useCanvasStore.getState().openProject(capturedCanvasId);
+            const asset = await (runtime.ensureNodeAsset || ensureCanvasNodeAsset)({ canvasId: capturedCanvasId, domainProjectId: project?.projectId,
+                node: applied.node, taskId: task.id, source: "canvas-generation", signal: input.signal });
+            if (!asset.confirmed) throw new Error("局部编辑结果尚未保存到素材库，请继续取回");
+            if (!owns()) throw new DOMException("The operation was aborted", "AbortError");
+            compositeAssetId = asset.assetId;
+        }
+    }
+
+    if (!compositeAssetId) await hydrateOutputs(task, input.signal, {
         writeAsset: (asset) => {
             useAssetStore.setState((state) => (state.assets.some((item) => item.id === asset.id) ? state : { assets: [asset, ...state.assets] }));
         },
@@ -324,6 +355,7 @@ export async function bindBackendCanvasGenerationResult(input: {
                 traceId: task.traceId,
                 nodeId: input.nodeId,
                 outputIndex,
+                ...(compositeAssetId ? { compositeAssetId } : {}),
                 signal: input.signal,
             });
             break;
@@ -378,8 +410,10 @@ export async function bindBackendCanvasGenerationResult(input: {
     const canonical = canonicalCanvasFromReceipt(capturedCanvasId, receipt);
     const adopted = await adoptConfirmedProjection(canonical);
     if (adopted && input.isCurrent()) {
-        input.nodesRef.current = adopted.nodes;
-        input.setNodes(adopted.nodes);
+        const nodes = reconcileCanvasImageVersionBatches(adopted.nodes);
+        if (nodes !== adopted.nodes) useCanvasStore.getState().updateProject(capturedCanvasId, { nodes });
+        input.nodesRef.current = nodes;
+        input.setNodes(nodes);
     }
     recordCanvasBindingDiagnostic({ phase: "confirmed", canvasId: capturedCanvasId, nodeId: input.nodeId, outputIndex, task, project: adopted });
 }

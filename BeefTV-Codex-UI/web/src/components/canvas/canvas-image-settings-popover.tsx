@@ -10,6 +10,7 @@ import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capab
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 import { seedreamFamily } from "@/lib/seedream-image";
+import { resolveCanvasImageGenerationCount } from "@/lib/canvas/canvas-image-generation-count";
 
 type CanvasImageSettingsPopoverProps = {
     config: AiConfig;
@@ -39,11 +40,11 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
         ...(profile.size.parameter !== "none" ? [imageSizeLabel(normalized.size, profile)] : []),
         ...(profile.quality.supported ? [imageQualityLabel(normalized.quality)] : []),
         ...(seedream && seedream !== "pro" && seedream !== "flash" && Number(config.seedreamMaxImages) > 1 ? [`每批最多 ${config.seedreamMaxImages} 张`] : []),
-        ...(showCount && profile.maxOutputs > 1 ? [`${normalized.count} ${seedream ? "批" : "张"}`] : []),
+        ...(showCount ? [`${resolveCanvasImageGenerationCount(profile, config.count)} ${seedream ? "批" : "张"}`] : []),
         ...(profile.transparentBackground.supported && normalized.transparentBackground === "true" ? ["透明"] : []),
     ];
     const summary = summaryOverride || summaryParts.join(" · ");
-    const hasSettings = profile.size.parameter !== "none" || profile.quality.supported || profile.transparentBackground.supported || (showCount && profile.maxOutputs > 1);
+    const hasSettings = profile.size.parameter !== "none" || profile.quality.supported || profile.transparentBackground.supported || showCount;
     const updateOpen = (nextOpen: boolean) => {
         setOpen(nextOpen);
         onOpenChange?.(nextOpen);
@@ -138,7 +139,7 @@ function ImageSettingsPortal({
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
         >
-            <ImageSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} showCount={showCount} quickCount={3} className="space-y-3" />
+            <ImageSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} showCount={showCount} className="space-y-3" />
         </div>,
         document.body,
     );

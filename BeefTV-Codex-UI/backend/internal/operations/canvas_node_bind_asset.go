@@ -3,6 +3,8 @@ package operations
 import (
 	"encoding/json"
 	"strings"
+
+	"infinite-canvas/backend/internal/canvas"
 )
 
 func registerCanvasNodeBindAsset(r *Registry) {
@@ -90,6 +92,7 @@ func opCanvasNodeBindAsset(ctx *Context, raw json.RawMessage) (any, error) {
 	if taskID, _ := metadata["taskId"].(string); taskID != "" {
 		return nil, PreconditionFailed("node_has_task", "请使用独立参考节点，不覆盖已有任务节点", nil)
 	}
+	canvas.FitBoundMediaNodeGeometry(node, resource.Width, resource.Height)
 	metadata["assetId"] = asset.ID
 	metadata["storageKey"] = "resource:" + resource.ID
 	metadata["content"] = "/api/resources/" + resource.ID + "/file"

@@ -102,8 +102,8 @@ def process_check(bridge=None):
         environment['BEEFTV_RELEASE_BRIDGE'] = str(bridge or '')
         run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
              "if (Get-Process BeefTV -ErrorAction SilentlyContinue) { throw 'Close BeefTV normally before installing.' }; "
-             "$bridgeScript = Join-Path $env:BEEFTV_RELEASE_BRIDGE 'server.py'; "
-             "if (Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^python(w)?\\.exe$' -and $_.CommandLine -and $_.CommandLine.IndexOf($bridgeScript, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) { throw 'Stop the idle bridge before replacing its source.' }"], env=environment)
+             "if ($env:BEEFTV_RELEASE_BRIDGE) { $bridgeScript = Join-Path $env:BEEFTV_RELEASE_BRIDGE 'server.py'; "
+             "if (Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^python(w)?\\.exe$' -and $_.CommandLine -and $_.CommandLine.IndexOf($bridgeScript, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) { throw 'Stop the idle bridge before replacing its source.' } }"], env=environment)
 
 def backup_sqlite(source, target):
     if not source.exists(): return
@@ -130,21 +130,7 @@ def require_desktop_compatible(data, manifest):
         raise ValueError(f'Release cannot read desktop schema {version} (supported: {reader}); preserve the database and use a compatible recovery release')
     return version
 
-def retention_after_success(directory, category):
-    from dreama_retention import after_success
-    try:
-        return after_success(directory, category)
-    except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as error:
-        # A failed cleanup must not turn a completed installation into a retry.
-        print('Retention skipped: ' + str(error), file=sys.stderr)
-        return None
-
 def install(package, app, data, bridge, codex, backup_root, process_check=process_check):
-    from dreama_retention import release_operation
-    with release_operation(backup_root, 'backups'):
-        return _install(package, app, data, bridge, codex, backup_root, process_check)
-
-def _install(package, app, data, bridge, codex, backup_root, process_check):
     package, app, data, bridge, codex = (Path(path).resolve() for path in (package, app, data, bridge, codex))
     roots = {'app': app, 'bridge': bridge, 'codex': codex}
     for left in [*roots.values(), data]:
@@ -153,7 +139,13 @@ def _install(package, app, data, bridge, codex, backup_root, process_check):
     if len({*roots.values(), data}) != 4: raise ValueError('Installation roots must be distinct')
     manifest = json.loads((package / 'release.json').read_text('utf-8'))
     verify_package(package, manifest)
-    process_check(bridge=bridge); state = require_idle(data, bridge)
+    changed = set()
+    for item in manifest['files']:
+        target = member(roots[item['area']], item['path'])
+        if not target.is_file() or digest(target) != item['sha256']:
+            changed.add((item['area'], item['path']))
+    process_check(bridge=bridge if any(area == 'bridge' for area, _ in changed) else None)
+    state = require_idle(data, bridge)
     if state['version'] > manifest.get('ledgerSchemaVersion', 0): raise ValueError('Release cannot read the current task ledger')
     desktop_schema = require_desktop_compatible(data, manifest)
     backup = Path(backup_root).resolve() / datetime.now(timezone.utc).strftime('dreama-%Y%m%dT%H%M%S-%fZ')
@@ -163,7 +155,7 @@ def _install(package, app, data, bridge, codex, backup_root, process_check):
               'ledgerBefore': state, 'desktopSchemaBefore': desktop_schema, 'files': [], 'completed': False}
     for item in manifest['files']:
         target = member(roots[item['area']], item['path'])
-        entry = {**item, 'existed': target.exists()}
+        entry = {**item, 'existed': target.exists(), 'changed': (item['area'], item['path']) in changed}
         if target.exists():
             saved = member(backup / item['area'], item['path']); saved.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(target, saved)
             entry['previousSha256'] = digest(saved)
@@ -173,26 +165,30 @@ def _install(package, app, data, bridge, codex, backup_root, process_check):
     for source, name in [(data / 'local-model-config.json', 'local-model-config.json.enc'), (data / '.settings-key', 'settings-key'),
                          (data / 'dreama-integration.json', 'dreama-integration.json'), (app / 'dreama-release.json', 'previous-release.json')]:
         if source.exists(): shutil.copy2(source, backup / name)
-    record['supplementalHashes'] = {path.name: digest(path) for path in backup.iterdir() if path.is_file()}
     write_json(backup / 'record.json', record)
     try:
         for item in manifest['files']:
+            if (item['area'], item['path']) not in changed: continue
             target = member(roots[item['area']], item['path']); target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(member(package / item['area'], item['path']), target)
-            if digest(target) != item['sha256']: raise ValueError('Installed file hash mismatch')
+        for item in manifest['files']:
+            target = member(roots[item['area']], item['path'])
+            if not target.is_file() or digest(target) != item['sha256']:
+                raise ValueError('Installed file hash mismatch: ' + item['area'] + '/' + item['path'])
         write_json(data / 'dreama-integration.json', {'schemaVersion': 1, 'pythonExecutable': sys.executable,
                    'bridgeDirectory': str(bridge), 'origin': 'http://127.0.0.1:18765'})
         write_json(app / 'dreama-release.json', manifest)
     except BaseException:
-        restore_files(backup, record)
+        restore_files(backup, record, changed_only=True)
         raise
     record['completed'] = True; write_json(backup / 'record.json', record)
-    retention_after_success(backup_root, 'backups')
     return backup
 
-def restore_files(backup, record):
+def restore_files(backup, record, changed_only=False):
     roots = {key: Path(value).resolve() for key, value in record['roots'].items()}
     for item in record['files']:
+        # Failed installation must not overwrite untouched live bridge modules.
+        if changed_only and not item.get('changed', True): continue
         target = member(roots[item['area']], item['path'])
         if item['existed']:
             saved = member(backup / item['area'], item['path'])
@@ -206,11 +202,6 @@ def restore_files(backup, record):
         elif target.exists(): target.unlink()
 
 def rollback(backup, process_check=process_check):
-    from dreama_retention import release_operation
-    with release_operation(Path(backup).parent, 'backups'):
-        return _rollback(backup, process_check)
-
-def _rollback(backup, process_check):
     backup = Path(backup).resolve(); record = json.loads((backup / 'record.json').read_text('utf-8'))
     process_check(bridge=Path(record['roots']['bridge'])); state = require_idle(Path(record['data']), Path(record['roots']['bridge']))
     previous = record['previousRelease']
@@ -249,11 +240,6 @@ def bundle_dreama_plugin(bridge, app):
 
 def activate(app, backup, channel_id, runner=run):
     """Run after launching the installed desktop; uses its authenticated CLI only."""
-    from dreama_retention import release_operation
-    with release_operation(Path(backup).parent, 'backups'):
-        return _activate(app, backup, channel_id, runner)
-
-def _activate(app, backup, channel_id, runner):
     app, backup = Path(app).resolve(), Path(backup).resolve()
     record = json.loads((backup / 'record.json').read_text('utf-8'))
     manifest = installed_release(app)
@@ -286,11 +272,6 @@ def _activate(app, backup, channel_id, runner):
     return result
 
 def make_package(repo, bridge, codex, build, output, tag, customization):
-    from dreama_retention import release_operation
-    with release_operation(Path(output).parent, 'releases'):
-        return _make_package(repo, bridge, codex, build, output, tag, customization)
-
-def _make_package(repo, bridge, codex, build, output, tag, customization):
     repo, bridge, codex, build, output = (Path(value).resolve() for value in (repo, bridge, codex, build, output))
     if output.exists(): raise ValueError('Package output must be a new directory')
     if git(repo, 'status', '--porcelain') or git(bridge, 'status', '--porcelain'):
@@ -318,7 +299,6 @@ def _make_package(repo, bridge, codex, build, output, tag, customization):
         for path in sorted((output / area).rglob('*')):
             if path.is_file(): manifest['files'].append({'area': area, 'path': path.relative_to(output / area).as_posix(), 'sha256': digest(path)})
     write_json(output / 'release.json', manifest); verify_package(output, manifest)
-    retention_after_success(output.parent, 'releases')
     return {'package': str(output), 'files': len(manifest['files']), 'sourceCommit': manifest['sourceCommit']}
 
 def main():

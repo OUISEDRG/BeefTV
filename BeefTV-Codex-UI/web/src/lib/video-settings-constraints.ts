@@ -19,6 +19,8 @@ export function videoSettingsConstraints(
     const first = metadata?.videoStartFrameNodeId;
     const last = metadata?.videoEndFrameNodeId;
     const resolved = resolveModelRequestConfig(config, config.model);
+    const videoProfile = modelCapabilityConfigFor(config, config.model).video;
+    if (metadata?.videoEditOperation === "upscale" && videoCount > 0 && videoProfile?.durationSupported === false) return { durationLocked: true };
     const h3 = isBeefAPIEndpoint(resolved.baseUrl) && beefAPIVideoContract(model) && isH3Model(model);
     if (h3) {
         // Canvas submission resolves the operation before building the provider payload.
@@ -43,5 +45,5 @@ export function videoSettingsConstraints(
             ratioHelp: `视频比例由${frame}图片决定。需要其他比例时，请先裁切或扩图，再生成视频。`,
         };
     }
-    return seedanceSettingsConstraints(modelCapabilityConfigFor(config, config.model).video, imageCount, videoCount, audioCount, metadata?.videoEditOperation, Boolean(first || last));
+    return seedanceSettingsConstraints(videoProfile, imageCount, videoCount, audioCount, metadata?.videoEditOperation, Boolean(first || last));
 }

@@ -8,11 +8,11 @@ import { ModelReasoningPicker } from "@/components/model-reasoning-picker";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { generationPromptRequired } from "@/lib/generation-prompt";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
-import { buildGenerationConfig as buildNodeConfig, buildCanvasGenerationRequirements } from "@/lib/canvas/canvas-generation-config";
+import { buildGenerationConfig as buildNodeConfig, buildCanvasGenerationRequirements, canvasModelRequestOptions } from "@/lib/canvas/canvas-generation-config";
 import { parseDreamaVoiceBinding } from "@/lib/dreama-voice";
 import { PROMPT_EDITOR_VIEWPORT_MARGIN } from "@/lib/canvas/canvas-prompt-editor-size";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { modelRequestOptions, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
+import { defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -46,6 +46,7 @@ import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resou
 import { CanvasReferenceFeedback, useCanvasReferenceCheck } from "./canvas-reference-feedback";
 import type { CanvasReferenceAction } from "@/lib/canvas/canvas-reference-issues";
 import { ConnectedReferenceShelf, ReferenceToolsPopover, referenceShelfHeading } from "./canvas-node-reference-shelf";
+import { CanvasQuickConnectControl } from "./canvas-quick-connect-control";
 import {
     PROMPT_EDITOR_MODAL_DEFAULT_HEIGHT,
     PROMPT_EDITOR_MODAL_DEFAULT_WIDTH,
@@ -79,13 +80,15 @@ type CanvasNodePromptPanelProps = {
     referenceNodes?: CanvasNodeData[];
     referenceConnections?: CanvasConnection[];
     onLocateReferenceNode?: (nodeId: string) => void;
+    quickConnectActive?: boolean;
+    onToggleQuickConnect?: () => void;
     onClose?: () => void;
     onNodeMouseDown?: (event: ReactPointerEvent, nodeId: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
     workspaceMode?: CanvasWorkspaceMode;
 };
 
-export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, onOpenGenerationHistory, onCreateGenerationReplacement, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, referenceNodes = [node], referenceConnections = [], onLocateReferenceNode, onClose, onNodeMouseDown, onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, onOpenGenerationHistory, onCreateGenerationReplacement, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, referenceNodes = [node], referenceConnections = [], onLocateReferenceNode, quickConnectActive = false, onToggleQuickConnect, onClose, onNodeMouseDown, onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const currentCanvas = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
     const dreamaBinding = currentCanvas?.integrations?.dreama;
@@ -108,6 +111,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [presetOpen, setPresetOpen] = useState(false);
     const [expandedPresetOpen, setExpandedPresetOpen] = useState(false);
     const [expandedPromptOpen, setExpandedPromptOpen] = useState(false);
+    const [expandedModalRendered, setExpandedModalRendered] = useState(false);
     const [expandedModalSize, setExpandedModalSize] = useState<{ width: number; height: number } | null>(null);
     const expandedModalRef = useRef<HTMLDivElement>(null);
     const [promptContentHeight, setPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, false));
@@ -121,7 +125,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [referenceAction, setReferenceAction] = useState<CanvasReferenceAction | null>(null);
     const missingSubmissionIdentity = ["submitting", "unknown"].includes(node.metadata?.generationSubmissionState || "") && !node.metadata?.taskId && !node.metadata?.taskClientOperationId?.trim();
     const needsRecoverySection = missingSubmissionIdentity || (!isRunning && isNodeRegenerateBlocked(node.metadata));
-    const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill");
+    const activeReferences = useMemo(() => resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill"), [resolvedMentionReferences]);
     const requirements = buildCanvasGenerationRequirements(globalConfig, node, mode, {
         textCount: (prompt.trim() ? 1 : 0) + activeReferences.filter((item) => item.kind === "text").length,
         imageCount: activeReferences.filter((item) => item.kind === "image" && !(mode === "audio" && parseDreamaVoiceBinding(referenceNodes.find(source => source.id === item.nodeId)?.metadata?.dreamaVoiceBinding))).length,
@@ -138,7 +142,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const availableModels = selectableModelsByCapability(config, mode);
     const resolvedRequirements: ModelRequirements = {
         ...requirements,
-        options: modelRequestOptions(config, mode),
+        options: canvasModelRequestOptions(config, mode),
         videoSeconds: mode === "video" ? config.videoSeconds : undefined,
     };
     const promptOptimizerProvider = useMemo(() => {
@@ -147,9 +151,9 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     }, [globalConfig, promptOptimizerEnabled, promptOptimizerInstallation]);
     const priceChannel = resolveModelChannel(config, config.model);
     const activeReferenceCount = activeReferences.length;
-    const videoFrameOptions = resolvedMentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
+    const videoFrameOptions = useMemo(() => resolvedMentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl })), [resolvedMentionReferences]);
     const h3Model = isH3Model(config.model);
-    const videoReferenceInputs = activeReferences.flatMap((reference) => reference.kind === "skill" ? [] : [{ nodeId: reference.nodeId, type: reference.kind, title: reference.title }]);
+    const videoReferenceInputs = useMemo(() => activeReferences.flatMap((reference) => reference.kind === "skill" ? [] : [{ nodeId: reference.nodeId, type: reference.kind, title: reference.title }]), [activeReferences]);
     const hasVideoPromptTools = mode === "video" && !simpleMode && (videoFrameOptions.length > 0 || (h3Model && videoReferenceInputs.some((input) => input.type !== "text")));
     const renderVideoPromptTools = () => (
         <>
@@ -401,7 +405,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                                 const patch = mode === "image" ? { model, ...defaultImageParamsForModel(config, model) } : { model };
                                 if (mode === "image" || mode === "video") {
                                     const nextConfig = buildNodeConfig(globalConfig, { ...node, metadata: { ...node.metadata, ...patch } }, mode, { ...requirements, options: undefined });
-                                    if (mode === "image") rememberImageSettings({ model: nextConfig.model, ratio: nextConfig.size, quality: nextConfig.quality, count: nextConfig.count, transparentBackground: nextConfig.transparentBackground });
+                                    if (mode === "image") rememberImageSettings({ model: nextConfig.model, ratio: nextConfig.size, quality: nextConfig.quality, transparentBackground: nextConfig.transparentBackground });
                                     else rememberVideoSettings({ model: nextConfig.model, ratio: nextConfig.size, seconds: nextConfig.videoSeconds, videoQuality: nextConfig.vquality, generateAudio: nextConfig.videoGenerateAudio, watermark: nextConfig.videoWatermark });
                                 }
                                 onConfigChange(node.id, patch);
@@ -461,7 +465,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                                 placement={expanded ? "topRight" : "topLeft"}
                                 buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
                                 onConfigChange={(key, value) => {
-                                    rememberImageSettings(imagePreferencePatch(key, value));
+                                    if (key !== "count") rememberImageSettings(imagePreferencePatch(key, value));
                                     onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value });
                                 }}
                                 onMissingConfig={() => navigateToSettings({ continueCreation: true })}
@@ -497,7 +501,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                                         <div className="grid grid-cols-3 gap-1.5">
                                             {([
                                                 { value: undefined, label: "参考生成" },
-                                                { value: "extend", label: "视频续写" },
+                                                { value: "extend", label: "视频延长" },
                                                 { value: "inpaint", label: "视频局部修改" },
                                             ] as const).map((item) => {
                                                 const active = (node.metadata?.videoEditOperation || undefined) === item.value;
@@ -537,6 +541,12 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         const fontSize = expanded ? expandedFontSize : promptFontSize;
         return (
             <>
+                {onToggleQuickConnect ? <div className="shrink-0 px-2.5 pb-1 pt-2">
+                    <CanvasQuickConnectControl active={quickConnectActive} theme={theme} onToggle={() => {
+                        if (!quickConnectActive) setExpandedPromptOpen(false);
+                        onToggleQuickConnect();
+                    }} />
+                </div> : null}
                 <div className={fill ? "canvas-node-composer-editor flex-1" : "canvas-node-composer-editor"} style={fill ? { minHeight: bounds.min } : { height, ...(expanded ? { flexShrink: 0 } : null) }}>
                     <ConnectedReferenceShelf
                         targetNodeId={node.id}
@@ -690,6 +700,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             <Modal
                 className="canvas-prompt-editor-modal"
                 open={expandedPromptOpen}
+                afterOpenChange={setExpandedModalRendered}
                 title={null}
                 footer={null}
                 centered
@@ -705,19 +716,21 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     body: { minHeight: 0, padding: 0 },
                 }}
             >
-                <div ref={expandedModalRef} className="relative flex min-h-0 flex-col" style={{ ...composerTokens, color: theme.node.text, maxHeight: `calc(100dvh - ${PROMPT_EDITOR_VIEWPORT_MARGIN}px)`, ...(expandedModalSize ? { height: expandedModalSize.height } : null) }}>
-                    <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3">
-                        <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
-                        {renderPromptEditor(true, Boolean(expandedModalSize))}
-                        {hasVideoPromptTools ? (
-                            <div className="canvas-node-composer-parameters shrink-0">
-                                {renderVideoPromptTools()}
-                            </div>
-                        ) : null}
-                        <div className="shrink-0">{renderComposerControls(true)}</div>
+                {expandedPromptOpen || expandedModalRendered ? (
+                    <div ref={expandedModalRef} className="relative flex min-h-0 flex-col" style={{ ...composerTokens, color: theme.node.text, maxHeight: `calc(100dvh - ${PROMPT_EDITOR_VIEWPORT_MARGIN}px)`, ...(expandedModalSize ? { height: expandedModalSize.height } : null) }}>
+                        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3">
+                            <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
+                            {renderPromptEditor(true, Boolean(expandedModalSize))}
+                            {hasVideoPromptTools ? (
+                                <div className="canvas-node-composer-parameters shrink-0">
+                                    {renderVideoPromptTools()}
+                                </div>
+                            ) : null}
+                            <div className="shrink-0">{renderComposerControls(true)}</div>
+                        </div>
+                        <PromptModalResizeHandle size={expandedModalSize} measure={measureExpandedModalSize} onResize={setExpandedModalSize} accent={theme.node.muted} />
                     </div>
-                    <PromptModalResizeHandle size={expandedModalSize} measure={measureExpandedModalSize} onResize={setExpandedModalSize} accent={theme.node.muted} />
-                </div>
+                ) : null}
             </Modal>
 
             </div>
@@ -755,7 +768,6 @@ function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: bool
 function imagePreferencePatch(key: keyof AiConfig, value: string) {
     if (key === "size") return { ratio: value };
     if (key === "quality") return { quality: value };
-    if (key === "count") return { count: String(Number(value) || 1) };
     if (key === "transparentBackground") return { transparentBackground: value };
     return {};
 }

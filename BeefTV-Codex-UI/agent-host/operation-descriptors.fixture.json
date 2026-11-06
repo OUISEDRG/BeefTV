@@ -176,6 +176,47 @@
     "replay": "safe"
   },
   {
+    "id": "canvas.generation.prepare",
+    "summary": "只读编译剧梦视频节点，检查剧集绑定、参数、素材引用与音色，返回最终预览和快照摘要；不上传、不创建远端分镜、不排队、不生成或扣费。外部调用方获授权后可将 snapshotHash 和两个版本交给 canvas.generation.submit。",
+    "readOnly": true,
+    "scope": "canvas",
+    "params": {
+      "type": "object",
+      "properties": {
+        "canvasId": {
+          "type": "string"
+        },
+        "nodeIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedModelConfigRevision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "canvasId",
+        "nodeIds"
+      ],
+      "additionalProperties": false
+    },
+    "assistantModes": [
+      "full-access",
+      "read-only",
+      "canvas"
+    ],
+    "replay": "safe"
+  },
+  {
     "id": "canvas.generation.propose",
     "summary": "提议对选中节点做付费图片/视频生成（只登记提议，不生成、不扣费）",
     "readOnly": true,
@@ -245,6 +286,12 @@
           "description": "外部调用必填，来自 canvas.get 或生成提议的 source.canvasRevision",
           "minimum": 1,
           "type": "integer"
+        },
+        "expectedSnapshotHash": {
+          "description": "剧梦视频必填 canvas.generation.prepare 返回的 snapshotHash；服务端重新编译并核对后，使用同一任务入口提交",
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
         },
         "kind": {
           "description": "可省略以按各节点实际类型提交混合批次",

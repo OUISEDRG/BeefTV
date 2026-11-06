@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { CANVAS_DELETE_DIALOG_ID_KEYS, clearDeletedCanvasDialogIds } from "@/pages/canvas/use-canvas-project-dialogs";
+import { clearDeletedCanvasDialogIds } from "@/pages/canvas/use-canvas-project-dialogs";
 
 describe("clearDeletedCanvasDialogIds", () => {
-    test("clears editor dialogs for removed nodes and leaves the timeline dialog id", () => {
+    test("clears dialogs for removed nodes and preserves unrelated dialogs", () => {
         const ids = {
             textEditorNodeId: "text-1",
             characterReferenceNodeId: "char-1",
@@ -16,13 +16,11 @@ describe("clearDeletedCanvasDialogIds", () => {
             artCritiqueNodeId: "art-1",
             directorNodeId: "director-1",
             versionCompareRootId: "version-1",
-            timelineNodeId: "timeline-1",
         };
-        const next = clearDeletedCanvasDialogIds(ids, new Set(["text-1", "timeline-1", "director-1"]));
+        const next = clearDeletedCanvasDialogIds(ids, new Set(["text-1", "director-1"]));
         expect(next.textEditorNodeId).toBeNull();
         expect(next.directorNodeId).toBeNull();
-        expect(next.timelineNodeId).toBe("timeline-1");
-        expect(CANVAS_DELETE_DIALOG_ID_KEYS).not.toContain("timelineNodeId");
+        expect(next.subtitleNodeId).toBe("sub-1");
         expect(clearDeletedCanvasDialogIds(ids, new Set(["missing"]))).toBe(ids);
     });
 });

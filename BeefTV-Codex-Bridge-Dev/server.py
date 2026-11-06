@@ -231,6 +231,10 @@ def main():
     root=args.root.resolve(); state=root/'state'; state.mkdir(parents=True,exist_ok=True)
     work=root/'runtime'; work.mkdir(parents=True,exist_ok=True)
     config=json.loads((root/'runtime-config.json').read_text('utf-8'))
+    if config.get('codexHome'):
+        codex_home=Path(config['codexHome']).resolve(strict=True)
+        temporary=codex_home/'.tmp'; temporary.mkdir(exist_ok=True)
+        os.environ.update(CODEX_HOME=str(codex_home),TEMP=str(temporary),TMP=str(temporary))
     from codex_rpc import RpcSession
     from model_catalog import ModelCatalog, probe_native_catalog
     from reasoning_settings import ReasoningSettings

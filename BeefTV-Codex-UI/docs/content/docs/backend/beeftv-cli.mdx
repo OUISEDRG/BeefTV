@@ -94,6 +94,14 @@ beeftv business discover   # 已挂载的业务 REST 接口清单，含 path/que
 
 `ops` 是助手、MCP 与脚本共用的操作面；`business` 是底层业务接口面。数量随版本变化，以实际输出为准。
 
+`ops call` 与 `business call` 的 `--params -` 从标准输入读取 JSON，最多 8 MiB。长剧本或画布正文应通过 UTF-8 标准输入传入，避开 Windows 命令行长度限制；只有明确的 `-` 才会读取标准输入，普通内联 JSON 用法不变。例如已保存的 `prepare.json` 包含 `canvasId`、`nodeIds` 与可选版本号时：
+
+```bash
+beeftv ops call canvas.generation.prepare --params - < prepare.json
+```
+
+此重定向示例适用于 Bash 或 cmd；Python 等程序可直接把 UTF-8 JSON 字节交给子进程的 stdin，不需要拼接 shell 命令。`canvas.generation.prepare` 只检查已保存的剧梦画布草稿，不会发起收费生成，具体范围见[剧梦专用工作台](./dreama-workbench)。
+
 ## 5. 读取画布与素材
 
 默认输出是缩进 JSON，方便人看；`--json` 输出单行紧凑 JSON，方便管道处理。业务结果走 stdout，诊断信息走 stderr。

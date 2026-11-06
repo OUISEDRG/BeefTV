@@ -24,6 +24,7 @@ func Bind(ports Ports, userID string, req Request) (Receipt, error) {
 	req.TaskID = strings.TrimSpace(req.TaskID)
 	req.NodeID = strings.TrimSpace(req.NodeID)
 	req.EffectKey = strings.TrimSpace(req.EffectKey)
+	req.CompositeAssetID = strings.TrimSpace(req.CompositeAssetID)
 	if userID == "" {
 		return Receipt{}, invalid("missing_scope", "缺少用户/工作区作用域")
 	}
@@ -50,6 +51,15 @@ func Bind(ports Ports, userID string, req Request) (Receipt, error) {
 		return Receipt{}, conflict("canvas_mismatch", "任务不属于这块画布")
 	}
 	target := localtask.OutputBinding(*task, req.OutputIndex)
+	if task.Type == "canvas_image" && target.RequiresImageComposite && req.CompositeAssetID == "" {
+		return Receipt{}, precondition("local_image_composite_required", "请在原画布中取回局部编辑结果，待选区合成后保存")
+	}
+	if req.CompositeAssetID != "" && (task.Type != "canvas_image" || !target.RequiresImageComposite || req.OutputIndex != 0) {
+		return Receipt{}, invalid("invalid_params", "只有局部编辑任务可以绑定合成素材")
+	}
+	if req.CompositeAssetID != "" && strings.TrimSpace(task.ProjectID) != req.CanvasID {
+		return Receipt{}, conflict("canvas_mismatch", "任务未指定这块画布")
+	}
 	nodeID := strings.TrimSpace(target.NodeID)
 	if localtask.SeedreamOutputRoot(*task) != "" && nodeID == "" {
 		return Receipt{}, invalid("invalid_params", "outputIndex 无效")
@@ -61,6 +71,9 @@ func Bind(ports Ports, userID string, req Request) (Receipt, error) {
 		if nodeID == "" {
 			return Receipt{}, conflict("node_mismatch", "产物未指定画布节点")
 		}
+	}
+	if req.CompositeAssetID != "" && nodeID == "" {
+		return Receipt{}, conflict("node_mismatch", "局部编辑任务未指定画布节点")
 	}
 	if nodeID != "" && nodeID != req.NodeID {
 		return Receipt{}, conflict("node_mismatch", "只能绑定到任务原先指定的节点")
@@ -124,6 +137,18 @@ func durablePatch(ports Ports, userID string, task model.Task, req Request) (Nod
 	if strings.TrimSpace(output.MaterializedAssetID) == "" || strings.TrimSpace(output.ResourceID) == "" {
 		return NodePatch{}, precondition("output_not_ready", "任务产物尚未就绪，不能绑定到画布")
 	}
+	if req.CompositeAssetID != "" {
+		composite, err := ports.OwnedAsset(userID, req.CompositeAssetID)
+		if err != nil {
+			return NodePatch{}, mapPortError(err)
+		}
+		if err := validateCompositeAsset(composite, userID, req, output.ResourceID); err != nil {
+			return NodePatch{}, err
+		}
+		output.MaterializedAssetID = composite.ID
+		output.ResourceID = assetResourceID(composite)
+		output.MediaType = "image"
+	}
 	resource, err := ports.OwnedReadyResource(userID, output.ResourceID)
 	if err != nil {
 		return NodePatch{}, mapPortError(err)
@@ -136,6 +161,14 @@ func durablePatch(ports Ports, userID string, task model.Task, req Request) (Nod
 	}
 	if strings.TrimSpace(resource.ID) != strings.TrimSpace(output.ResourceID) {
 		return NodePatch{}, precondition("resource_mismatch", "任务资源与产物记录不一致，不能绑定到画布")
+	}
+	if req.CompositeAssetID != "" && (resource.Kind != "image" || resource.Width <= 0 || resource.Height <= 0) {
+		return NodePatch{}, precondition("resource_mismatch", "合成素材必须是已就绪的完整图片")
+	}
+	if req.CompositeAssetID != "" {
+		if err := validateCompositeDimensions(ports, userID, task, resource); err != nil {
+			return NodePatch{}, err
+		}
 	}
 	asset, err := ports.OwnedAsset(userID, output.MaterializedAssetID)
 	if err != nil {

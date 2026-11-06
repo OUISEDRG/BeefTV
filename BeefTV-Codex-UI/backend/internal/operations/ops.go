@@ -29,6 +29,7 @@ func RegisterDefaultOps(r *Registry) {
 	registerCanvasNodeConfigureOps(r)
 	registerStoryboardPreparation(r)
 	registerGenerationSubmit(r)
+	registerGenerationPrepare(r)
 	registerCanvasProjectExportOps(r)
 	r.Register(Op{AssistantCanvas: true, ID: "canvas.get", Summary: "读取指定画布的完整内容（节点与连线）", ReadOnly: true, Scope: ScopeCanvas,
 		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"}},"required":["canvasId"]}`),
@@ -70,7 +71,7 @@ func RegisterDefaultOps(r *Registry) {
 		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"nodeIds":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":8},"kind":{"type":"string","enum":["image","video","audio"]},"productionNodeIds":{"type":"array","items":{"type":"string"},"maxItems":24,"description":"完整制作时，先准备所有首帧、视频和旁白草稿，将全部计划生成的节点列在这里，一次确认后后台继续；nodeIds仍只列当前依赖已就绪的首批"},"note":{"type":"string"}},"required":["canvasId","nodeIds","kind"]}`),
 		Handler: opCanvasGenerationPropose})
 	r.Register(Op{ReplaySafe: true, AssistantCanvas: true, ID: "canvas.task.bind", Summary: "把已交付任务产物绑定到原节点；同画布本地时间线成片可绑定到空 video 节点，绑定后用 nodeId 检查成片（校验归属、就绪资源与版本，幂等回执）", Scope: ScopeCanvas,
-		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"taskId":{"type":"string"},"nodeId":{"type":"string"},"outputIndex":{"type":"integer"}},"required":["canvasId","taskId","nodeId"]}`),
+		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"taskId":{"type":"string"},"nodeId":{"type":"string"},"outputIndex":{"type":"integer"},"compositeAssetId":{"type":"string"}},"required":["canvasId","taskId","nodeId"]}`),
 		Handler: opCanvasTaskBind, ProjectReplay: projectCanvasTaskBindReplay})
 	r.Register(Op{ID: "conversation.message.attach", Summary: "把已交付的任务产物绑定到原对话消息（校验归属与就绪资源，带 revision CAS，幂等回执）", Scope: ScopeConversation,
 		Params:  json.RawMessage(`{"type":"object","properties":{"conversationId":{"type":"string"},"taskId":{"type":"string"},"messageId":{"type":"string"},"outputIndex":{"type":"integer"}},"required":["conversationId","taskId","messageId"]}`),

@@ -271,6 +271,29 @@ test("in-place media generation preserves the existing shot name before submissi
     }
 });
 
+test("image, video and audio executors publish the old media snapshot before any submission", async () => {
+    for (const [type, execute] of [[CanvasNodeType.Image, executeImageGeneration], [CanvasNodeType.Video, executeVideoGeneration], [CanvasNodeType.Audio, executeAudioGeneration]] as const) {
+        const target: CanvasNodeData = { ...project.nodes[0]!, type, metadata: { content: "resource:old", storageKey: "resource:old", assetId: "old-asset", status: "success", generationResultPlacement: "replace-node" } };
+        useCanvasStore.setState({ projects: [{ ...structuredClone(project), nodes: [target] }] });
+        const nodesRef = { current: [target] };
+        const stop = new Error("stopped before task submission");
+        await expect(execute({
+            pageUi: createCanvasPageUiStore(), sourceNode: target, nodeId: target.id,
+            canvasNodes: [target], canvasConnections: [], nodesRef,
+            prompt: "new", effectivePrompt: "new", projectId: project.id,
+            generationConfig: { model: "test-model", count: "1", size: "16:9", channels: [] },
+            generationContext: { referenceImages: [], referenceVideos: [], referenceAudios: [], resolvedCharacterVersions: [], resolvedCharacterVoices: [] },
+            controller: new AbortController(), setNodes: () => undefined, setConnections: () => undefined, registerPendingNodeIds: () => undefined,
+            startGenerationRequest: () => { throw stop; },
+        } as unknown as CanvasGenerationExecution)).rejects.toBe(stop);
+        const saved = useCanvasStore.getState().projects[0]!.nodes;
+        expect(saved).toHaveLength(2);
+        expect(saved.find(node => node.metadata?.mediaVersionOwnerId === target.id)?.metadata).toMatchObject({ content: "resource:old", storageKey: "resource:old", assetId: "old-asset", versionLabel: "A" });
+        expect(saved.find(node => node.id === target.id)?.metadata?.versionLabel).toBe("B");
+        expect(nodesRef.current).toBe(saved);
+    }
+});
+
 test("executor retains original batch outputs after layout deletion, cancellation, copying and regeneration", async () => {
     const proposal = { proposalId: "p1", kind: "image" as const, nodeIds: ["source"], model: "test-model", modelKey: "test::image" };
     const createTargets = async (source: CanvasNodeData, nodes: CanvasNodeData[], count: string) => {

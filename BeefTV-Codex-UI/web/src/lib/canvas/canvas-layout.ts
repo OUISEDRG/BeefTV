@@ -1,28 +1,119 @@
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type Position } from "@/types/canvas";
-import { isFrameNode } from "./canvas-frame";
+import { getFrameDescendantIds, isFrameNode, isNodeHiddenByCollapsedFrame } from "./canvas-frame";
+import { isHiddenBatchChild } from "./canvas-project-domain";
+import { fitImageNodeToDecodedSize, fitVideoNodeToDecodedSize } from "./canvas-node-size";
 
 export type CanvasLayoutMode = "row" | "column" | "grid";
 export type CanvasAlignmentMode = "left" | "centerX" | "right" | "top" | "centerY" | "bottom" | "distributeX" | "distributeY";
 export type CanvasLayoutLane = "text" | "image" | "video" | "audio";
 
 const FLOW_COLUMN_GAP = 120;
-const LANE_GAP = 96;
-const LANE_NODE_GAP = 36;
-const GRID_NODE_GAP = 32;
 const LANE_ORDER: CanvasLayoutLane[] = ["text", "image", "video", "audio"];
+export type CanvasLayoutOptions = { viewportScale?: number };
 
-export function layoutCanvasNodes(nodes: CanvasNodeData[], mode: CanvasLayoutMode) {
+export function canvasLayoutSpacing(viewportScale = 1) {
+    const zoom = Number.isFinite(viewportScale) ? Math.max(0.05, viewportScale) : 1;
+    return { horizontal: Math.max(80, 24 / zoom), vertical: Math.max(140, (32 + 16) / zoom), minimumTitleWidth: 160 / zoom };
+}
+
+function layoutWidth(node: CanvasNodeData, options?: CanvasLayoutOptions) {
+    return Math.max(node.width, canvasLayoutSpacing(options?.viewportScale).minimumTitleWidth);
+}
+
+/** Dimensions are resolved before placement; columns and rows use their actual largest card. */
+export function layoutCanvasNodeGrid(nodes: CanvasNodeData[], origin: Position, columns: number, options?: CanvasLayoutOptions) {
+    const result = new Map<string, Position>();
+    if (!nodes.length) return result;
+    const count = Math.max(1, Math.min(nodes.length, Math.floor(columns) || 1));
+    const { horizontal, vertical } = canvasLayoutSpacing(options?.viewportScale);
+    const columnWidths = Array.from({ length: count }, () => 0);
+    const rowHeights = Array.from({ length: Math.ceil(nodes.length / count) }, () => 0);
+    nodes.forEach((node, index) => {
+        columnWidths[index % count] = Math.max(columnWidths[index % count], layoutWidth(node, options));
+        rowHeights[Math.floor(index / count)] = Math.max(rowHeights[Math.floor(index / count)], node.height);
+    });
+    let y = origin.y;
+    rowHeights.forEach((height, row) => {
+        let x = origin.x;
+        columnWidths.forEach((width, column) => {
+            const node = nodes[row * count + column];
+            if (node) result.set(node.id, { x, y });
+            x += width + horizontal;
+        });
+        y += height + vertical;
+    });
+    return result;
+}
+
+export function prepareCanvasLayoutNodes(nodes: CanvasNodeData[]) {
+    return nodes.map((node) => {
+        const { naturalWidth, naturalHeight } = node.metadata || {};
+        if (!naturalWidth || !naturalHeight) return node;
+        if (node.type === CanvasNodeType.Image) return fitImageNodeToDecodedSize(node, naturalWidth, naturalHeight);
+        if (node.type === CanvasNodeType.Video) return fitVideoNodeToDecodedSize(node, naturalWidth, naturalHeight);
+        return node;
+    });
+}
+
+/** Move the planned block, not existing content, to the closest clear area below or to the right. */
+export function avoidCanvasLayoutObstacles(nodes: CanvasNodeData[], positions: Map<string, Position>, allNodes: CanvasNodeData[], options?: CanvasLayoutOptions) {
+    const moving = nodes.filter((node) => positions.has(node.id));
+    if (!moving.length) return positions;
+    const movingIds = new Set(moving.map((node) => node.id));
+    const obstacles = allNodes.filter((node) => !movingIds.has(node.id) && !isHiddenBatchChild(node, allNodes) && !isNodeHiddenByCollapsedFrame(node, allNodes)
+        && !(isFrameNode(node) && [...getFrameDescendantIds(node.id, allNodes)].some((id) => movingIds.has(id))));
+    if (!obstacles.length) return positions;
+    const left = Math.min(...moving.map((node) => positions.get(node.id)!.x));
+    const top = Math.min(...moving.map((node) => positions.get(node.id)!.y));
+    const width = Math.max(...moving.map((node) => positions.get(node.id)!.x + layoutWidth(node, options))) - left;
+    const height = Math.max(...moving.map((node) => positions.get(node.id)!.y + node.height)) - top;
+    const { horizontal, vertical } = canvasLayoutSpacing(options?.viewportScale);
+    const clear = (direction: "right" | "down") => {
+        const point = { x: left, y: top };
+        for (let attempt = 0; attempt <= obstacles.length; attempt++) {
+            const collisions = obstacles.filter((node) => point.x + width + horizontal > node.position.x && point.x < node.position.x + layoutWidth(node, options) + horizontal
+                && point.y + height + vertical > node.position.y && point.y < node.position.y + node.height + vertical);
+            if (!collisions.length) break;
+            if (direction === "right") point.x = Math.max(...collisions.map((node) => node.position.x + layoutWidth(node, options) + horizontal));
+            else point.y = Math.max(...collisions.map((node) => node.position.y + node.height + vertical));
+        }
+        return point;
+    };
+    const right = clear("right");
+    const down = clear("down");
+    const origin = right.x - left < down.y - top ? right : down;
+    if (origin.x === left && origin.y === top) return positions;
+    return new Map([...positions].map(([id, position]) => [id, { x: position.x + origin.x - left, y: position.y + origin.y - top }]));
+}
+
+export function layoutCanvasInsertedNodes(nodes: CanvasNodeData[], center: Position, allNodes: CanvasNodeData[] = [], options?: CanvasLayoutOptions & { columns?: number }) {
+    if (!nodes.length) return nodes;
+    const prepared = prepareCanvasLayoutNodes(nodes);
+    const origin = { x: center.x - prepared[0].width / 2, y: center.y - prepared[0].height / 2 };
+    const grid = layoutCanvasNodeGrid(prepared, origin, options?.columns || 4, options);
+    const positions = avoidCanvasLayoutObstacles(prepared, grid, allNodes, options);
+    return prepared.map((node) => ({ ...node, position: positions.get(node.id)! }));
+}
+
+export function applyCanvasNodeLayout(allNodes: CanvasNodeData[], prepared: CanvasNodeData[], positions: Map<string, Position>, options?: CanvasLayoutOptions) {
+    const placed = avoidCanvasLayoutObstacles(prepared, positions, allNodes, options);
+    const byId = new Map(prepared.map((node) => [node.id, node]));
+    return allNodes.map((node) => placed.has(node.id) ? { ...(byId.get(node.id) || node), position: placed.get(node.id)! } : node);
+}
+
+export function layoutCanvasNodes(nodes: CanvasNodeData[], mode: CanvasLayoutMode, options?: CanvasLayoutOptions) {
+    if (!nodes.length) return new Map<string, Position>();
     const sorted = [...nodes].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
     const left = Math.min(...sorted.map((node) => node.position.x));
     const top = Math.min(...sorted.map((node) => node.position.y));
-    const gap = 32;
+    const { horizontal, vertical } = canvasLayoutSpacing(options?.viewportScale);
     const result = new Map<string, Position>();
 
     if (mode === "row") {
         let x = left;
         sorted.forEach((node) => {
             result.set(node.id, { x, y: top });
-            x += node.width + gap;
+            x += layoutWidth(node, options) + horizontal;
         });
         return result;
     }
@@ -31,20 +122,18 @@ export function layoutCanvasNodes(nodes: CanvasNodeData[], mode: CanvasLayoutMod
         let y = top;
         sorted.forEach((node) => {
             result.set(node.id, { x: left, y });
-            y += node.height + gap;
+            y += node.height + vertical;
         });
         return result;
     }
 
     const columns = Math.ceil(Math.sqrt(sorted.length));
-    const cellWidth = Math.max(...sorted.map((node) => node.width)) + gap;
-    const cellHeight = Math.max(...sorted.map((node) => node.height)) + gap;
-    sorted.forEach((node, index) => result.set(node.id, { x: left + (index % columns) * cellWidth, y: top + Math.floor(index / columns) * cellHeight }));
-    return result;
+    return layoutCanvasNodeGrid(sorted, { x: left, y: top }, columns, options);
 }
 
-export function layoutCanvasFlow(nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+export function layoutCanvasFlow(nodes: CanvasNodeData[], connections: CanvasConnection[], options?: CanvasLayoutOptions) {
     if (!nodes.length) return new Map<string, Position>();
+    const { horizontal, vertical } = canvasLayoutSpacing(options?.viewportScale);
     const selectedIds = new Set(nodes.map((node) => node.id));
     const inbound = new Map(nodes.map((node) => [node.id, 0]));
     const outbound = new Map(nodes.map((node) => [node.id, [] as string[]]));
@@ -81,7 +170,7 @@ export function layoutCanvasFlow(nodes: CanvasNodeData[], connections: CanvasCon
     layers.forEach((layer) => {
         const layerNodes = nodes.filter((node) => layerById.get(node.id) === layer);
         layerX.set(layer, x);
-        x += Math.max(...layerNodes.map((node) => node.width)) + FLOW_COLUMN_GAP;
+        x += Math.max(...layerNodes.map((node) => layoutWidth(node, options))) + Math.max(FLOW_COLUMN_GAP, horizontal);
     });
 
     let laneTop = top;
@@ -95,51 +184,46 @@ export function layoutCanvasFlow(nodes: CanvasNodeData[], connections: CanvasCon
         });
         let laneHeight = 0;
         stacks.forEach((stack) => {
-            const height = stack.reduce((sum, node) => sum + node.height, 0) + Math.max(0, stack.length - 1) * LANE_NODE_GAP;
+            const height = stack.reduce((sum, node) => sum + node.height, 0) + Math.max(0, stack.length - 1) * vertical;
             laneHeight = Math.max(laneHeight, height);
         });
         stacks.forEach((stack, layer) => {
             let y = laneTop;
             stack.sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x).forEach((node) => {
                 result.set(node.id, { x: layerX.get(layer) || left, y });
-                y += node.height + LANE_NODE_GAP;
+                y += node.height + vertical;
             });
         });
-        laneTop += laneHeight + LANE_GAP;
+        laneTop += laneHeight + vertical;
     });
     return result;
 }
 
-export function layoutCanvasNodesByMediaType(nodes: CanvasNodeData[]) {
+export function layoutCanvasNodesByMediaType(nodes: CanvasNodeData[], options?: CanvasLayoutOptions) {
     if (!nodes.length) return new Map<string, Position>();
     const left = Math.min(...nodes.map((node) => node.position.x));
     const top = Math.min(...nodes.map((node) => node.position.y));
     const result = new Map<string, Position>();
+    const { vertical } = canvasLayoutSpacing(options?.viewportScale);
     let laneTop = top;
 
     LANE_ORDER.forEach((lane) => {
         const laneNodes = nodes.filter((node) => canvasLayoutLane(node) === lane).sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
         if (!laneNodes.length) return;
         const columns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(laneNodes.length))));
-        const cellWidth = Math.max(...laneNodes.map((node) => node.width)) + GRID_NODE_GAP;
-        const cellHeight = Math.max(...laneNodes.map((node) => node.height)) + GRID_NODE_GAP;
-        laneNodes.forEach((node, index) => {
-            result.set(node.id, {
-                x: left + (index % columns) * cellWidth,
-                y: laneTop + Math.floor(index / columns) * cellHeight,
-            });
-        });
-        laneTop += Math.ceil(laneNodes.length / columns) * cellHeight - GRID_NODE_GAP + LANE_GAP;
+        const positions = layoutCanvasNodeGrid(laneNodes, { x: left, y: laneTop }, columns, options);
+        positions.forEach((position, id) => result.set(id, position));
+        laneTop = Math.max(...laneNodes.map((node) => positions.get(node.id)!.y + node.height)) + vertical;
     });
     return result;
 }
 
-export function layoutCanvasAuto(nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+export function layoutCanvasAuto(nodes: CanvasNodeData[], connections: CanvasConnection[], options?: CanvasLayoutOptions) {
     const candidates = nodes.filter((node) => !node.metadata?.locked && !isFrameNode(node));
     if (candidates.length < 2) return new Map<string, Position>();
     const candidateIds = new Set(candidates.map((node) => node.id));
     const hasConnections = connections.some((connection) => candidateIds.has(connection.fromNodeId) && candidateIds.has(connection.toNodeId));
-    return hasConnections ? layoutCanvasFlow(candidates, connections) : layoutCanvasNodesByMediaType(candidates);
+    return hasConnections ? layoutCanvasFlow(candidates, connections, options) : layoutCanvasNodesByMediaType(candidates, options);
 }
 
 export const CANVAS_SPREAD_SCALE = 1.4;
@@ -149,17 +233,20 @@ export const CANVAS_SPREAD_MIN_GAP = 56;
  * 保持选区里节点的相对占位，只把彼此间距拉开。
  * 先按选区左上角等比展开，再把仍然过近的盒子沿原有主方向推开，最后把整组钉回原来的左上角。
  */
-export function spreadCanvasNodes(nodes: CanvasNodeData[], options?: { scale?: number; minGap?: number }) {
+export function spreadCanvasNodes(nodes: CanvasNodeData[], options?: CanvasLayoutOptions & { scale?: number; minGap?: number }) {
     const result = new Map<string, Position>();
     if (nodes.length < 2) return result;
 
     const scale = options?.scale ?? CANVAS_SPREAD_SCALE;
     const minGap = options?.minGap ?? CANVAS_SPREAD_MIN_GAP;
+    const spacing = canvasLayoutSpacing(options?.viewportScale);
+    const gapX = Math.max(minGap, spacing.horizontal);
+    const gapY = Math.max(minGap, spacing.vertical);
     const originX = Math.min(...nodes.map((node) => node.position.x));
     const originY = Math.min(...nodes.map((node) => node.position.y));
     const items = nodes.map((node) => ({
         id: node.id,
-        width: node.width,
+        width: layoutWidth(node, options),
         height: node.height,
         x: originX + (node.position.x - originX) * scale,
         y: originY + (node.position.y - originY) * scale,
@@ -171,8 +258,8 @@ export function spreadCanvasNodes(nodes: CanvasNodeData[], options?: { scale?: n
             for (let j = i + 1; j < items.length; j++) {
                 const first = items[i]!;
                 const second = items[j]!;
-                const overlapX = Math.min(first.x + first.width + minGap, second.x + second.width + minGap) - Math.max(first.x, second.x);
-                const overlapY = Math.min(first.y + first.height + minGap, second.y + second.height + minGap) - Math.max(first.y, second.y);
+                const overlapX = Math.min(first.x + first.width + gapX, second.x + second.width + gapX) - Math.max(first.x, second.x);
+                const overlapY = Math.min(first.y + first.height + gapY, second.y + second.height + gapY) - Math.max(first.y, second.y);
                 if (overlapX <= 0 || overlapY <= 0) continue;
 
                 const centerDx = first.x + first.width / 2 - (second.x + second.width / 2);

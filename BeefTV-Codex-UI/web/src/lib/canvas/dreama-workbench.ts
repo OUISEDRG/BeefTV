@@ -2,7 +2,7 @@ import type { CanvasNodeData } from "@/types/canvas";
 import type { DreamaCanvasBinding, DreamaGenerationBinding, DreamaGenerationPreview, DreamaProject } from "@/types/dreama-workbench";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
-import { isFrameNode } from "@/lib/canvas/canvas-frame";
+import { resolveCanvasNodeAncestry } from "@/lib/canvas/canvas-node-ancestry";
 import type { DreamaTask } from "@/services/api/dreama-workbench";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 
@@ -66,23 +66,7 @@ export function freezeDreamaBinding(binding: DreamaCanvasBinding | undefined, ca
     if (!binding || binding.schemaVersion !== 1 || binding.promptMode !== "drama" || !positiveId(binding.projectId) || !positiveId(binding.revision) || !binding.aspectRatio?.trim()) throw new Error("请先在剧梦工作台绑定此画布的项目和默认剧集");
     if (!canvasId.trim() || !nodeId.trim()) throw new Error("画布或生成节点不存在");
     const byId = new Map(nodes.map(node => [node.id, node]));
-    let current = byId.get(nodeId);
-    if (!current) throw new Error("生成节点已不存在");
-    const seen = new Set<string>();
-    const series = new Set<number>();
-    while (current) {
-        if (seen.has(current.id)) throw new Error("剧集分组存在循环，请修复分组关系");
-        seen.add(current.id);
-        if (current.metadata?.dreamaSeriesId !== undefined) {
-            if (!isFrameNode(current) || !positiveId(current.metadata.dreamaSeriesId)) throw new Error("剧集分组绑定无效，请重新选择剧集");
-            series.add(current.metadata.dreamaSeriesId);
-        }
-        if (!current.parentId) break;
-        current = byId.get(current.parentId);
-        if (!current) throw new Error("节点的分组已不存在，无法确定剧集归属");
-    }
-    if (series.size > 1) throw new Error("节点属于多个不同剧集分组，请保留唯一剧集归属");
-    const seriesId = [...series][0] ?? binding.defaultSeriesId;
+    const seriesId = resolveCanvasNodeAncestry(nodeId, byId).dreamaSeriesId ?? binding.defaultSeriesId;
     if (!positiveId(seriesId)) throw new Error("请设置默认剧集或将节点放入已绑定剧集的分组");
     return { schemaVersion: 1, canvasId, nodeId, projectId: binding.projectId, seriesId, promptMode: "drama", aspectRatio: binding.aspectRatio, bindingRevision: binding.revision };
 }
@@ -129,6 +113,6 @@ export function buildDreamaGenerationPreview(binding: DreamaGenerationBinding, m
         binding: { ...binding }, model, mode, prompt: context.prompt, parameters: structuredClone(parameters),
         media: [["图片", context.referenceImages], ["视频", context.referenceVideos], ["音频", context.referenceAudios]].flatMap(([kind, items]) =>
             (items as Array<{ id: string; name: string }>).map((item, index) => ({ kind: String(kind), index: index + 1, id: item.id, name: item.name }))),
-        voices: voices.map(voice => ({ image_index: voice.image_index, name: voice.name, ...(voice.voice_id ? { voice_id: voice.voice_id } : {}), ...(voice.audio ? { sample: true } : {}) })),
+        voices: voices.map(voice => ({ image_index: voice.image_index, name: voice.name, ...(voice.voice_id ? { voice_id: voice.voice_id } : {}), ...(voice.sampleResourceId ? { sample: true } : {}) })),
     };
 }

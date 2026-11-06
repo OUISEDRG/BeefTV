@@ -25,11 +25,11 @@ type CanvasEmotionWorkspaceProps = {
     dragOffset?: Position | null;
     isDragging?: boolean;
     onClose: () => void;
-    onConfirm: (payload: CanvasImageEmotionPayload) => void;
+    dataUrl?: string;
+    onConfirm: (payload: CanvasImageEmotionPayload) => void | Promise<void>;
 };
 
-export function CanvasEmotionWorkspace({ projectId, node, viewport, containerRef, dragOffset, isDragging = false, onClose, onConfirm }: CanvasEmotionWorkspaceProps) {
-    const dataUrl = node.metadata?.content || "";
+export function CanvasEmotionWorkspace({ projectId, node, viewport, containerRef, dragOffset, isDragging = false, onClose, onConfirm, dataUrl }: CanvasEmotionWorkspaceProps) {
     const support = useDreamaImageToolSupport("emotion", node, projectId);
     const [status, setStatus] = useState<WorkspaceStatus>("detecting");
     const [faces, setFaces] = useState<CanvasFaceBox[]>([]);
@@ -49,6 +49,12 @@ export function CanvasEmotionWorkspace({ projectId, node, viewport, containerRef
         setCharacters([]);
         setActiveCharacterId("");
         setPreset(neutralEmotionPreset);
+        if (dataUrl === undefined) return;
+        if (!dataUrl) {
+            setStatus("error");
+            setError("原图读取失败，请重新选择图片");
+            return;
+        }
         void detectCanvasFaces(dataUrl, controller.signal)
             .then((result) => {
                 setImageSize({ width: result.imageWidth, height: result.imageHeight });
@@ -92,13 +98,13 @@ export function CanvasEmotionWorkspace({ projectId, node, viewport, containerRef
     const confirmGeneration = async () => {
         if (support?.disabled) return;
         const character = characters.find((item) => item.id === activeCharacterId);
-        if (!character || !imageSize.width || !imageSize.height) return;
+        if (!character || !dataUrl || !imageSize.width || !imageSize.height) return;
         setStatus("generating");
         setError("");
         try {
             const artifacts = await buildEmotionImageArtifacts(dataUrl, character.faceBox, imageSize.width, imageSize.height);
             const params = { presetId: preset.id, intimacy: preset.intimacy, arousal: preset.arousal, characterName: character.name, faceBox: character.faceBox };
-            onConfirm({
+            await onConfirm({
                 ...params,
                 label: preset.label,
                 prompt: buildEmotionPrompt(params, artifacts.editRegion),
@@ -110,12 +116,13 @@ export function CanvasEmotionWorkspace({ projectId, node, viewport, containerRef
                 imageHeight: artifacts.imageHeight,
             });
         } catch (reason) {
-            setStatus("editing");
             setError(reason instanceof Error ? reason.message : "生成前处理失败");
+        } finally {
+            setStatus("editing");
         }
     };
 
-    if (!portalTarget || !dataUrl) return null;
+    if (!portalTarget) return null;
     const activeCharacter = characters.find((character) => character.id === activeCharacterId);
     return createPortal(
         <>
@@ -140,7 +147,7 @@ export function CanvasEmotionWorkspace({ projectId, node, viewport, containerRef
             />
             <SelectionToolbar node={node} viewport={viewport} containerRef={containerRef} status={status} faceCount={faces.length} error={error} onManualSelect={beginManualSelection} onClose={onClose} />
             <AnimatePresence>
-                {activeCharacter && (status === "editing" || status === "generating") ? (
+                {activeCharacter && dataUrl && (status === "editing" || status === "generating") ? (
                     <CanvasNodePanelOverlay node={node} viewport={viewport} containerRef={containerRef} panelWidth={580} panelHeight={303} dragOffset={dragOffset} isDragging={isDragging}>
                         <CanvasNodeEmotionPanel
                             dataUrl={dataUrl}

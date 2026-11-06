@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { ChevronDown, ChevronRight, Video } from "lucide-react";
+import { ChevronDown, ChevronRight, Link2, Video } from "lucide-react";
 
 import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
@@ -19,6 +19,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     scale,
     isSelected,
     isDropTarget,
+    isConnectionTarget = false,
+    onConnectStart,
     onMouseDown,
     onResize,
     onToggleCollapsed,
@@ -36,6 +38,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     scale: number;
     isSelected: boolean;
     isDropTarget: boolean;
+    isConnectionTarget?: boolean;
+    onConnectStart?: (event: React.PointerEvent, nodeId: string, handleType: "source" | "target", handleId?: string, anchorRatio?: number) => void;
     onMouseDown: (event: ReactMouseEvent, nodeId: string) => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
     onToggleCollapsed: (nodeId: string) => void;
@@ -146,7 +150,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
         window.addEventListener("mouseup", handleResizeUp);
     };
 
-    const active = isSelected || isDropTarget;
+    const active = isSelected || isDropTarget || isConnectionTarget;
     const linkedFolder = Boolean(data.metadata?.folder?.assetFolderId);
     const workflowLabel = frameWorkflowLabel(data.metadata?.workflowKind);
     const workflow = data.type === CanvasNodeType.Workflow;
@@ -233,6 +237,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
             data-canvas-frame-kind={folder ? "folder" : "frame"}
             data-canvas-frame-collapsed={collapsed ? "true" : "false"}
             data-canvas-child-count={String(childNodes.length)}
+            data-canvas-connection-target={isConnectionTarget || undefined}
             role={folder && collapsed ? "group" : undefined}
             tabIndex={folder && collapsed ? 0 : undefined}
             aria-label={folder && collapsed ? `${data.title}，文件夹，${childNodes.length} 项内容。按回车打开` : undefined}
@@ -292,6 +297,16 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                     </>
                 )}
             </CometCard>
+            {!readOnly && data.type === CanvasNodeType.Frame && onConnectStart ? <button
+                type="button"
+                data-canvas-group-output
+                aria-label="引用整组素材，拖动到目标节点或空白处"
+                title="引用整组素材：拖到目标节点逐个连接，拖到空白处创建并引用整组"
+                className="pointer-events-auto absolute z-20 grid place-items-center rounded-full border shadow-sm touch-none cursor-crosshair focus-visible:outline focus-visible:outline-2"
+                style={{ width: 30 / Math.max(scale, 0.05), height: 30 / Math.max(scale, 0.05), left: "100%", top: "50%", transform: "translate(0, -50%)", background: theme.spatial.elevated, borderColor: theme.frame.activeStroke, color: theme.frame.activeStroke }}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => onConnectStart(event, data.id, "source", undefined, 0.5)}
+            ><Link2 aria-hidden="true" style={{ width: 16 / Math.max(scale, 0.05), height: 16 / Math.max(scale, 0.05) }} /></button> : null}
             {!readOnly && !collapsed && isSelected && !data.metadata?.locked ? (
                 <>
                     <ResizeHandle corner="top-left" scale={scale} theme={theme} onMouseDown={startResize} />

@@ -4,7 +4,7 @@ import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-st
 import type { DreamaVoiceBinding } from "@/types/dreama-voice";
 import type { ReferenceImage } from "@/types/image";
 
-export type DreamaCharacterVoice = { image_index: number; name: string; voice_id?: string; audio?: string };
+export type DreamaCharacterVoice = { image_index: number; name: string; voice_id?: string; sampleResourceId?: string };
 type VoiceContext = Pick<NodeGenerationContext, "referenceImages" | "referenceAudios" | "characterReferences" | "imageCount" | "dreamaAudioVoiceBinding">;
 
 function binding(value: unknown): DreamaVoiceBinding {
@@ -54,11 +54,11 @@ export async function buildDreamaCharacterVoices(
         seen.add(imageId);
         const result: DreamaCharacterVoice = { image_index: index, name: parsed.name };
         if (parsed.source === "catalog") return { ...result, voice_id: parsed.voiceId! };
-        const audio = await resolveSample(parsed.sampleResourceId!);
-        if (!/^data:audio\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/]+={0,2}$/.test(audio)) {
+        const sampleResourceId = await resolveSample(parsed.sampleResourceId!);
+        if (sampleResourceId !== parsed.sampleResourceId || !/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,159}$/.test(sampleResourceId)) {
             throw new Error("音色样本必须是已保存的音频资源，请重新上传音频样本");
         }
-        return { ...result, audio };
+        return { ...result, sampleResourceId };
     }));
 }
 

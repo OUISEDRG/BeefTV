@@ -14,6 +14,7 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { DreamaGenerationPreview } from "@/types/dreama-workbench";
 import type { CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
+import "./dreama-workbench.css";
 
 type Props = {
     project: CanvasProject;
@@ -117,8 +118,8 @@ export function DreamaWorkbench(props: Props) {
         setExpanded(true);
     };
     const problem = error || directory.error?.message || series.error?.message || tasks.error?.message;
-    return <section className="mt-[var(--canvas-topbar-h)] shrink-0 border-b border-border bg-background text-foreground" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="剧梦工作台">
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+    return <section className="dreama-workbench text-foreground" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="剧梦工作台">
+        <div className="dreama-workbench-controls flex items-center gap-2 text-xs">
             <strong>剧梦</strong>
             <div className="flex items-center gap-1"><span>项目</span><Select size="small" aria-label="剧梦项目" placeholder="选择剧梦项目" value={projectId} disabled={readOnly || busy || Boolean(binding)} loading={directory.isLoading} style={{ width: 180 }}
                 options={directory.data?.items.map(item => ({ value: item.id, label: item.name, disabled: item.promptMode !== "drama" })) ?? (binding ? [{ value: binding.projectId, label: binding.projectName, disabled: false }] : [])}
@@ -130,9 +131,10 @@ export function DreamaWorkbench(props: Props) {
             <Button size="small" disabled={busy || !channelId} onClick={() => void run(async () => { await directory.refetch({ throwOnError: true }); if (projectId) await series.refetch({ throwOnError: true }); await tasks.refetch({ throwOnError: true }); })}>刷新</Button>
             <Button size="small" disabled={readOnly || busy || !channelId} onClick={() => void run(refreshCatalog)}>刷新模型目录</Button>
         </div>
-        {problem ? <p role="alert" className="m-0 px-3 pb-2 text-xs text-destructive">{problem}</p> : null}
-        {!channel ? <p className="m-0 px-3 pb-2 text-xs">请在模型设置中启用已保存的本机剧梦渠道。</p> : null}
-        {expanded ? <div className="grid max-h-80 grid-cols-1 gap-3 overflow-auto border-t border-border p-3 text-xs lg:grid-cols-3">
+        {problem || !channel || expanded ? <div className="dreama-workbench-panel">
+        {problem ? <p role="alert" className="m-0 px-3 py-2 text-xs text-destructive">{problem}</p> : null}
+        {!channel ? <p className="m-0 px-3 py-2 text-xs">请在模型设置中启用已保存的本机剧梦渠道。</p> : null}
+        {expanded ? <div className="grid grid-cols-1 gap-3 p-3 text-xs lg:grid-cols-3">
             <div className="space-y-2">
                 <strong>剧集与分组</strong>
                 <div className="flex gap-1"><Input size="small" aria-label="新剧集名称" placeholder="输入新剧集名称" value={newSeriesName} onChange={event => setNewSeriesName(event.target.value)} disabled={readOnly || !channelId || !projectId || busy} /><Button size="small" disabled={readOnly || !channelId || !projectId || !newSeriesName.trim() || busy} onClick={() => void run(async () => {
@@ -150,6 +152,7 @@ export function DreamaWorkbench(props: Props) {
                 {previewNode?.metadata?.generationPreflightError ? <p role="alert">{previewNode.metadata.generationPreflightError}</p> : null}
             </div>
             <div className="space-y-2"><strong>当前画布任务</strong>{!tasks.data?.items.length ? <p>暂无剧梦任务</p> : tasks.data.items.map(task => <DreamaTaskRow key={task.id} task={task} busy={busy || readOnly} onOpen={() => { focusNode(task.nodeId); openTask(task.nodeId); }} onCancel={() => void run(async () => { await dreamaApi.cancelTask(channelId, task.id); await tasks.refetch({ throwOnError: true }); })} />)}</div>
+        </div> : null}
         </div> : null}
     </section>;
 }

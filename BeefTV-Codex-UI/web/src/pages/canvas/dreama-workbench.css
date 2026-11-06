@@ -1,0 +1,33 @@
+.dreama-workbench {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.dreama-workbench-controls {
+    max-width: 100%;
+    min-height: 32px;
+    padding: 2px 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: thin;
+    border-radius: 8px;
+    background: var(--dock-surface);
+    box-shadow: var(--elevation-overlay);
+}
+
+.dreama-workbench-controls > * {
+    flex-shrink: 0;
+}
+
+/* Anchor expanded details to the full top bar, outside the scrolling controls. */
+.dreama-workbench-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    inset-inline: 8px;
+    max-height: min(320px, calc(100dvh - var(--canvas-topbar-h) - 24px));
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--background);
+    box-shadow: var(--elevation-overlay);
+}

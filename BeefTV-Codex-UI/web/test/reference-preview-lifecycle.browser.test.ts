@@ -15,7 +15,7 @@ beforeAll(async () => {
             // unrelated registry of generation editors and provider adapters.
             builder.onResolve({ filter: /^@\/lib\/canvas\/node-registry$/ }, () => ({ path: Bun.resolveSync("../src/lib/canvas/node-registry/node-registry.ts", import.meta.dir) }));
             builder.onResolve({ filter: /^@\// }, (args) => ({ path: Bun.resolveSync("../src/" + args.path.slice(2), import.meta.dir) }));
-            builder.onLoad({ filter: /src\/lib\/video-poster\.ts$/ }, () => ({ loader: "js", contents: `
+            builder.onLoad({ filter: /src[\\/]lib[\\/]video-poster\.ts$/ }, () => ({ loader: "js", contents: `
                 export async function detectVideoAudioTrackFromBlob() { return undefined; }
                 export function detectVideoAudioTrack() { return undefined; }
                 export async function detectVideoAudioTrackFromUrl() { return undefined; }
@@ -27,13 +27,13 @@ beforeAll(async () => {
                     const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jO1sAAAAASUVORK5CYII='), c => c.charCodeAt(0));
                     return {poster: new Blob([bytes], {type:'image/png'}), width:40, height:30, capturedAtMs:0};
                 }` }));
-            builder.onLoad({ filter: /src\/services\/canvas-video-source\.ts$/ }, () => ({ loader: "js", contents: `export async function acquireCanvasVideoSource(key, content) { return {url: content || key, release() {}}; }` }));
-            builder.onLoad({ filter: /src\/services\/image-storage\.ts$/ }, () => ({ loader: "js", contents: `
+            builder.onLoad({ filter: /src[\\/]services[\\/]canvas-video-source\.ts$/ }, () => ({ loader: "js", contents: `export async function acquireCanvasVideoSource(key, content) { return {url: content || key, release() {}}; }` }));
+            builder.onLoad({ filter: /src[\\/]services[\\/]image-storage\.ts$/ }, () => ({ loader: "js", contents: `
                 export async function resolveImageUrl(key) { return 'data:image/png,' + key; }
                 const unexpected = () => { throw new Error('unexpected image storage operation'); };
                 export {unexpected as uploadImage, unexpected as getImageBlob, unexpected as setImageBlob, unexpected as imageToDataUrl, unexpected as deleteStoredImages, unexpected as cleanupUnusedImages, unexpected as collectImageStorageKeys};` }));
-            builder.onLoad({ filter: /src\/lib\/canvas\/canvas-drawing-storage\.ts$/ }, () => ({ loader: "js", contents: `export async function loadCanvasDrawingPreview() { return null; }` }));
-            builder.onLoad({ filter: /src\/hooks\/use-personal-asset-library\.ts$/ }, () => ({ loader: "js", contents: `export function usePersonalAssetLibrary() { return []; }` }));
+            builder.onLoad({ filter: /src[\\/]lib[\\/]canvas[\\/]canvas-drawing-storage\.ts$/ }, () => ({ loader: "js", contents: `export async function loadCanvasDrawingPreview() { return null; }` }));
+            builder.onLoad({ filter: /src[\\/]hooks[\\/]use-personal-asset-library\.ts$/ }, () => ({ loader: "js", contents: `export function usePersonalAssetLibrary() { return []; }` }));
         } }],
     });
     if (!build.success) throw new Error(build.logs.join("\n"));
@@ -90,6 +90,28 @@ test("cloning reference arrays during typing keeps the visible lease alive", asy
     expect(await page.locator('#resolved-previews img').getAttribute("src")).toBe(src);
     expect(await page.evaluate((url) => (window as any).revoked.includes(url), src)).toBe(false);
     expect(await page.evaluate(() => (window as any).captures)).toEqual(["typing"]);
+});
+
+test("passing parent-resolved active video references into mention textarea reuses the active lease without re-capturing", async () => {
+    await mount();
+    await page.evaluate((references) => {
+        (window as any).captures = [];
+        (window as any).setReferences(references);
+        (window as any).showMenu(true);
+    }, [video("active-self", true), video("inactive-peer", false)]);
+    await page.waitForFunction(() => document.querySelector("#result")!.textContent!.includes("blob:"));
+    const src = await page.locator('#resolved-previews img[data-reference-id="active-self"]').getAttribute("src");
+    await page.waitForTimeout(150);
+    expect(await page.evaluate(() => (window as any).captures)).toEqual(["active-self"]);
+    // Latch the resolved reference array on the child textarea, then drop the parent lease.
+    // Because the child reused the parent lease (refcount === 1), dropping the parent lease
+    // immediately revokes the object URL even while the child remains mounted with the latched array.
+    await page.evaluate(() => {
+        (window as any).latchMenuReferences();
+        (window as any).setReferences([]);
+    });
+    await page.waitForFunction((url) => document.querySelector("#result")!.textContent === "[]" && (window as any).revoked.includes(url), src);
+    expect(await page.evaluate((url) => (window as any).revoked.includes(url), src)).toBe(true);
 });
 
 test("mention menu decodes only visible rows and releases them when closed", async () => {

@@ -38,7 +38,7 @@ function distanceLabel(value: number) {
     return "中景";
 }
 
-export function CanvasNodeAnglePanel({ node, projectId, dataUrl, onClose, onConfirm }: { node: CanvasNodeData; projectId?: string; dataUrl: string; onClose: () => void; onConfirm: (params: CanvasImageAngleParams) => void }) {
+export function CanvasNodeAnglePanel({ node, projectId, dataUrl, onClose, onConfirm }: { node: CanvasNodeData; projectId?: string; dataUrl?: string; onClose: () => void; onConfirm: (params: CanvasImageAngleParams) => void }) {
     const theme = canvasThemes[useActiveTheme()];
     const support = useDreamaImageToolSupport("angle", node, projectId);
     const supportId = useId();
@@ -80,7 +80,7 @@ export function CanvasNodeAnglePanel({ node, projectId, dataUrl, onClose, onConf
             </div>
             <div className="canvas-angle-body">
                 <div className="canvas-angle-stage">
-                    <CanvasAngleScene
+                    {dataUrl ? <CanvasAngleScene
                         mode={mode}
                         rotate={params.horizontalAngle}
                         tilt={params.pitchAngle}
@@ -101,7 +101,9 @@ export function CanvasNodeAnglePanel({ node, projectId, dataUrl, onClose, onConf
                         }}
                         onRotateChange={(value) => update("horizontalAngle", value)}
                         onTiltChange={(value) => update("pitchAngle", value)}
-                    />
+                    /> : <div role="status" className="grid size-full place-items-center text-xs" style={{ color: theme.node.muted }}>
+                        {dataUrl === undefined ? "正在读取参考图…" : "无法读取参考图，请检查原图后重新打开。"}
+                    </div>}
                 </div>
                 <div className="flex min-w-0 flex-col justify-center gap-2 rounded-[var(--r-lg)] border px-2.5 py-2" style={{ background: theme.toolbar.itemHover, borderColor: theme.toolbar.border }}>
                     <AngleSeg value={mode} options={[{ label: "天空盒", value: "skybox" }, { label: "摄像头", value: "camera" }]} onChange={(value) => setMode(value as "camera" | "skybox")} />

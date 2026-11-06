@@ -9,6 +9,7 @@ import type { CanvasNodeData } from "@/types/canvas";
 export type CanvasNodeGraphContextValue = {
     getUpstreamNodes?: (nodeId: string) => CanvasNodeData[];
     getNode?: (nodeId: string) => CanvasNodeData | undefined;
+    getMediaVersions?: (nodeId: string) => CanvasNodeData[];
 };
 
 export const CanvasNodeGraphContext = createContext<CanvasNodeGraphContextValue>({});

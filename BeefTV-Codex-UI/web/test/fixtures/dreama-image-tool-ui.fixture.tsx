@@ -156,11 +156,14 @@ const renderToolbar = (compact: boolean) => {
     state = [null, compact ? 400 : 1000, { left: 100, top: 100 }]; cursor = 0;
     return elements(CanvasNodeToolbar(toolbarProps as any));
 };
+function videoToolIds(compact: boolean) {
+    const menu = renderToolbar(compact).find((element) => element.props.menuId === "video-processing");
+    return (menu?.props.tools || []).map((tool: any) => tool.id);
+}
 promptConfig.textModel = "codex-local::arbitrary-text";
-for (const compact of [false, true]) expect(renderToolbar(compact).some((element) => element.props.menuId === "video-ai-remix")).toBe(false);
+for (const compact of [false, true]) expect(videoToolIds(compact)).not.toContain("video-reverse-prompt");
 promptConfig.textModel = "other-text::arbitrary-text";
 for (const compact of [false, true]) {
-    const remix = renderToolbar(compact).find((element) => element.props.menuId === "video-ai-remix")!;
-    expect(remix.props.tools.map((tool: any) => tool.id)).toContain("video-reverse-prompt");
+    expect(videoToolIds(compact)).toContain("video-reverse-prompt");
 }
 console.log("PASS: video reverse entry disappears for the Codex bridge in wide and compact toolbars");

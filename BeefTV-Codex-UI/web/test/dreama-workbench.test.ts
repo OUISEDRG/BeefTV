@@ -97,7 +97,7 @@ test("preflight blocks dangling, unused and over-limit media before upload", () 
 test("final preview keeps exact compiled text and voice indices without media secrets", () => {
     const preview = buildDreamaGenerationPreview(freezeDreamaBinding(binding(), "canvas", "a", [node("a")]), "model", "video", { quality: "3K" }, {
         prompt: "  @图片2 重复@图片2\n原文  ", referenceImages: [{ id: "first", name: "景" }, { id: "second", name: "人" }], referenceVideos: [], referenceAudios: [],
-        dreamaVoiceProviderOptions: { "dreama-videos-async": { character_voices: [{ image_index: 2, name: "人", audio: "data:audio/mpeg;base64,YQ==" }] } },
+        dreamaVoiceProviderOptions: { "dreama-videos-async": { character_voices: [{ image_index: 2, name: "人", sampleResourceId: "owned-voice-sample" }] } },
     });
     expect(preview.prompt).toBe("  @图片2 重复@图片2\n原文  ");
     expect(preview.media).toEqual([{ kind: "图片", index: 1, id: "first", name: "景" }, { kind: "图片", index: 2, id: "second", name: "人" }]);

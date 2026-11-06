@@ -13,6 +13,7 @@ const searchTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
 export function searchCanvasNodes(nodes: CanvasNodeData[], query: string, limit = 80) {
     const keyword = query.trim().toLocaleLowerCase();
     return nodes
+        .filter((node) => !node.metadata?.mediaVersionOwnerId)
         .filter((node) => !keyword || canvasNodeSearchTerms(node).some((value) => value.toLocaleLowerCase().includes(keyword)))
         .sort((left, right) => timestampValue(canvasNodeUpdatedAt(right)) - timestampValue(canvasNodeUpdatedAt(left)))
         .slice(0, keyword ? limit : Math.min(limit, 40));

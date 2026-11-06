@@ -11,6 +11,10 @@ import (
 // The operation registry authenticates external clients and commits admission,
 // canvas receipts and operation replay together. No synthetic assistant turn is needed.
 func (s *operationSession) SubmitExternalGeneration(userID, operationID, canvasID string, targets []operations.GenerationTarget) (any, error) {
+	return s.submitExternalInputs(userID, operationID, canvasID, targets, nil)
+}
+
+func (s *operationSession) submitExternalInputs(userID, operationID, canvasID string, targets []operations.GenerationTarget, inputs map[string]map[string]any) (any, error) {
 	raw, err := s.canvas.UserCanvasProject(userID, canvasID)
 	if err != nil {
 		return nil, err
@@ -37,5 +41,5 @@ func (s *operationSession) SubmitExternalGeneration(userID, operationID, canvasI
 	}
 	// Namespace task keys separately from internal proposal IDs and caller-chosen strings.
 	plan := operations.GenerationAuthorization{ProposalID: fmt.Sprintf("external-%x", sha256.Sum256([]byte(operationID))), Targets: targets}
-	return s.admitProductionTargets(userID, canvasID, plan, targets)
+	return s.admitProductionInputs(userID, canvasID, plan, targets, inputs)
 }

@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, FileText, GripVertical, Image as ImageIcon, Lock, Maximize2, Move3d, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Video, WandSparkles } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
+import { CanvasNodeGraphContext } from "./canvas-node-graph-context";
+import { CanvasMediaVersionHistory } from "./canvas-media-version-history";
 import { canvasNodeFailureView } from "@/lib/canvas/canvas-node-failure-view";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -38,6 +40,7 @@ type CanvasNodeProps = {
     forceInputVisible?: boolean;
     showImageInfo: boolean;
     reduceMediaEffects?: boolean;
+    lodPinned?: boolean;
     readOnly?: boolean;
     resourceLabel?: CanvasResourceReference;
     mentionReferences?: CanvasResourceReference[];
@@ -98,6 +101,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     connectionApproach,
     forceInputVisible = false,
     reduceMediaEffects = false,
+    lodPinned = false,
     readOnly = false,
     mentionReferences = [],
     renderNodeContent,
@@ -149,12 +153,14 @@ export const CanvasNode = React.memo(function CanvasNode({
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [titleDraft, setTitleDraft] = useState(data.title);
     const { download: downloadNode, duplicate: duplicateNode, deleteNode } = useCanvasNodeActions();
+    const { getMediaVersions } = useContext(CanvasNodeGraphContext);
+    const mediaVersions = getMediaVersions?.(data.id) || [];
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content || data.metadata?.storageKey);
     const isComposerNode = data.type === CanvasNodeType.Config;
     const isDirectorNode = data.type === CanvasNodeType.Director || Boolean(data.metadata?.directorSceneId);
-    const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && batchCount > 1;
+    const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && !data.metadata?.imageBatchAsVersions && batchCount > 1;
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const failureView = canvasNodeFailureView(data);
     const showStatusTrack = Boolean(data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly));
@@ -334,6 +340,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             data-video-merge-source-count={data.metadata?.videoMergeSourceNodeIds?.length ? String(data.metadata.videoMergeSourceNodeIds.length) : undefined}
             data-media-operation-error={data.metadata?.mediaOperationError || undefined}
             data-node-hovered={hovered ? "true" : undefined}
+            data-node-lod-pinned={lodPinned ? "true" : undefined}
             data-asset-category={data.metadata?.assetCategory || undefined}
             className={`node-element absolute flex select-none flex-col ${dragOffset ? "cursor-grabbing" : data.type === CanvasNodeType.Drawing ? "cursor-pointer" : "cursor-default"} ${isSelected ? "z-[var(--z-node-toolbar)]" : isFocusRelated || isConnectionTarget ? "z-[var(--z-node-active)]" : "z-[var(--z-node)]"}`}
             style={{
@@ -517,7 +524,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </div>
                 ) : null}
 
-                {data.metadata?.versionLabel ? (
+                {data.metadata?.versionLabel && !mediaVersions.length ? (
                     <button
                         type="button"
                         // 版本徽标必须能在节点参数面板打开时继续点击；它是版本对比的稳定入口，
@@ -538,12 +545,13 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </button>
                 ) : null}
                 {showStatusTrack ? (
-                    <div className={`absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
+                    <div className={`absolute right-3 ${mediaVersions.length ? "top-12" : "top-3"} z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 ${data.metadata?.versionLabel ? "max-w-[calc(100%-104px)]" : "max-w-[calc(100%-24px)]"}`}>
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
                         {isBatchChild && !readOnly ? <BatchPrimaryBadge visible={batchPrimary || hovered || isSelected} selected={batchPrimary} theme={theme} onSelect={() => onSetBatchPrimary?.(data)} /> : null}
                         {data.metadata?.locked ? <NodeLockBadge theme={theme} /> : null}
                     </div>
                 ) : null}
+                <CanvasMediaVersionHistory node={data} versions={mediaVersions} theme={theme} readOnly={readOnly || Boolean(data.metadata?.locked)} onViewImage={onViewImage} />
                 {/* 批次子图操作条：成功子项提供下载/副本/设为主图，失败子项提供重试/删除 */}
                 {isBatchChild && !readOnly && (hasImageContent || data.metadata?.status === "error") && (hovered || isSelected) ? (
                     <div
@@ -590,7 +598,7 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.data === next.data &&
         previous.dragOffset?.x === next.dragOffset?.x &&
         previous.dragOffset?.y === next.dragOffset?.y &&
-        previous.scale === next.scale &&
+        Math.abs(previous.scale - next.scale) < 1e-6 &&
         previous.isSelected === next.isSelected &&
         previous.mediaActive === next.mediaActive &&
         previous.isRelated === next.isRelated &&
@@ -601,8 +609,8 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.forceInputVisible === next.forceInputVisible &&
         previous.showImageInfo === next.showImageInfo &&
         previous.reduceMediaEffects === next.reduceMediaEffects &&
+        previous.lodPinned === next.lodPinned &&
         previous.readOnly === next.readOnly &&
-        previous.resourceLabel === next.resourceLabel &&
         previous.mentionReferences === next.mentionReferences &&
         (!usesCanvasCustomNodeContent(next.data) || previous.renderNodeContent === next.renderNodeContent) &&
         previous.drawingProjectId === next.drawingProjectId &&

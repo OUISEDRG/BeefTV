@@ -1,4 +1,4 @@
-import { lazy, Suspense, type MutableRefObject } from "react";
+import { lazy, Suspense } from "react";
 import { App } from "antd";
 import { syncNodeSubtitlesToTimeline } from "@/lib/timeline/timeline-build";
 import { CanvasNodeType } from "@/types/canvas";
@@ -24,7 +24,6 @@ import { CanvasScriptEditor } from "@/components/canvas/canvas-script-node";
 import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-modal";
 import { CanvasSubtitleDialog } from "@/components/canvas/canvas-subtitle-dialog";
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
-import { CanvasTimelineDialog } from "@/components/canvas/canvas-timeline-dialog";
 import { CanvasVersionCompareModal } from "@/components/canvas/canvas-version-compare-modal";
 import { CanvasVideoFrameDialog } from "@/components/canvas/canvas-video-frame-dialog";
 import type { CanvasImageUpscaleParams } from "@/components/canvas/canvas-node-upscale-dialog";
@@ -35,7 +34,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import type { ProjectDetail } from "@/services/api/projects";
 import type { AiConfig } from "@/stores/use-config-store";
 import { type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type ViewportTransform } from "@/types/canvas";
-import type { TimelineDirectMedia, TimelineProject } from "@/types/timeline";
+import type { TimelineProject } from "@/types/timeline";
 
 import { LibTVImportDialog } from "./components/libtv-import-dialog";
 import { TapNowImportDialog } from "./components/tapnow-import-dialog";
@@ -69,14 +68,7 @@ export type CanvasProjectEditorDialogsProps = {
     };
     timeline: {
         project: TimelineProject | null;
-        onSave: (next: TimelineProject) => void | Promise<void>;
         onUpdate: (next: TimelineProject) => void;
-        onOpenAssetLibrary: () => void;
-        onOpenProjectAssets: () => void;
-        onUploadLocalFiles: (files: File[]) => Promise<TimelineDirectMedia[]>;
-        addNodeToTimelineRef: MutableRefObject<((node: CanvasNodeData) => void) | null>;
-        addMediaToTimelineRef: MutableRefObject<((media: TimelineDirectMedia) => void) | null>;
-        onCreateAssembledNode: (blob: Blob, title: string) => Promise<CanvasNodeData | null>;
     };
     directorOnboardingScope: string;
     onDeleteNodes: (nodeIds: Set<string>) => void;
@@ -110,7 +102,6 @@ export function CanvasProjectEditorDialogs({
     const { nodeById, infoNode, previewNode, activeScriptNode, activeDirectorScene, versionCompareNodes } = renderModel;
     const findNode = (id: string | null) => id ? nodeById.get(id) || null : null;
     const subtitleNode = findNode(dialogs.subtitleNodeId);
-    const timelineNode = findNode(dialogs.timelineNodeId);
     const frameNode = findNode(mediaTools.frameDialogNodeId);
     const characterNode = findNode(dialogs.characterReferenceNodeId);
     const textNode = findNode(dialogs.textEditorNodeId);
@@ -149,24 +140,6 @@ export function CanvasProjectEditorDialogs({
             <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => dialogs.setInfoNodeId(null)} onMetadataChange={nodeEditor.handleConfigNodeChange} />
             {subtitleNode ? <CanvasSubtitleDialog node={subtitleNode} open={Boolean(subtitleNode)} projectId={projectId} config={config} onClose={() => dialogs.setSubtitleNodeId(null)} onSave={saveSubtitles} /> : null}
             {frameNode ? <CanvasVideoFrameDialog node={frameNode} open={Boolean(frameNode)} onClose={mediaTools.closeFrameDialog} onConfirm={params => { if (frameNode) void mediaTools.extractVideoFrames(frameNode, params); }} /> : null}
-            {timelineNode ? (
-                <CanvasTimelineDialog
-                    node={timelineNode}
-                    open={Boolean(timelineNode)}
-                    nodes={nodes}
-                    timeline={timeline.project}
-                    onClose={() => dialogs.setTimelineNodeId(null)}
-                    onOpenSubtitleDialog={nodeId => { dialogs.setTimelineNodeId(null); dialogs.setSubtitleNodeId(nodeId); }}
-                    onSave={timeline.onSave}
-                    onSaveSubtitles={(nodeId, entries) => nodeEditor.handleConfigNodeChange(nodeId, { subtitleEntries: entries, ...(entries.length ? {} : { subtitleHighlights: [] }), subtitleUpdatedAt: new Date().toISOString() })}
-                    onOpenAssetLibrary={timeline.onOpenAssetLibrary}
-                    onOpenProjectAssets={timeline.onOpenProjectAssets}
-                    onUploadLocalFiles={timeline.onUploadLocalFiles}
-                    addNodeToTimelineRef={timeline.addNodeToTimelineRef}
-                    addMediaToTimelineRef={timeline.addMediaToTimelineRef}
-                    onCreateAssembledNode={timeline.onCreateAssembledNode}
-                />
-            ) : null}
             <CanvasCharacterReferenceModal node={characterNode} open={Boolean(characterNode)} onClose={() => dialogs.setCharacterReferenceNodeId(null)} />
             <CanvasTextEditorModal node={textNode} open={Boolean(textNode)} onClose={() => dialogs.setTextEditorNodeId(null)} onSave={saveText} />
             {drawingNode ? (

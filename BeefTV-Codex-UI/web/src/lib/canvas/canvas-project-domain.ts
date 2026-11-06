@@ -388,6 +388,7 @@ export function calculateNodeAlignment(context: NodeAlignmentContext | null, raw
 
 
 export function isHiddenBatchChild(node: CanvasNodeData, nodes: CanvasNodeData[], collapsingBatchIds?: Set<string>) {
+    if (node.metadata?.mediaVersionOwnerId) return true;
     const rootId = node.metadata?.batchRootId;
     if (!rootId) return false;
     const root = nodes.find((item) => item.id === rootId);
@@ -451,6 +452,7 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
     while (expanded) {
         const previousSize = removedIds.size + ownedIds.size;
         for (const node of nodes) {
+            if (node.metadata?.mediaVersionOwnerId && removedIds.has(node.metadata.mediaVersionOwnerId)) removedIds.add(node.id);
             if (removedIds.has(node.id)) node.metadata?.batchChildIds?.forEach(id => removedIds.add(id));
             if (node.parentId && ownedIds.has(node.parentId)) { removedIds.add(node.id); ownedIds.add(node.id); }
         }

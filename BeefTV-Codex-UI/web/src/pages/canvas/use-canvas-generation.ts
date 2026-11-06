@@ -18,6 +18,7 @@ import { generationFailureMetadata } from "@/lib/generation-error";
 import { canvasGenerationTaskNodes, canvasNodeHasConfirmedTaskResult, canvasTaskFailureMetadata } from "./canvas-generation-failure";
 import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 import { consumeCanvasGenerationContinuation } from "./use-canvas-operation-history";
+import { reconcileCanvasImageVersionBatches } from "@/lib/canvas/canvas-image-version-batch";
 
 type CanvasGenerationRequest = {
     targetNodeId: string;
@@ -189,6 +190,11 @@ export async function recoverCanvasGenerationTaskNode(input: {
                     : item,
             ),
         );
+    } finally {
+        if (isCurrentProject()) {
+            input.nodesRef.current = reconcileCanvasImageVersionBatches(input.nodesRef.current);
+            input.setNodes(current => isCurrentProject() ? reconcileCanvasImageVersionBatches(current) : current);
+        }
     }
 }
 
@@ -388,6 +394,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
     const selectRecoveryNodes = useCallback(
         (candidates: CanvasNodeData[]) =>
             candidates.filter((node) => {
+                if (node.metadata?.imageBatchAsVersions && !node.metadata.mediaVersionOwnerId) return false;
                 if (!canvasNodeNeedsGenerationRecovery(node) || isLiveRequestNode(node.id)) return false;
                 const identity = recoveryTaskIdentity(node);
                 return recoveringNodesRef.current.get(node.id)?.identity !== identity && !(identity && recoveringTaskIdsRef.current.has(identity));
@@ -542,7 +549,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             setNodes((current) =>
                 isCurrentProject()
                     ? current.map((node) => {
-                          if (!node.metadata?.isBatchRoot || !node.metadata.batchChildIds?.length || node.metadata.taskId) return node;
+                          if (!node.metadata?.isBatchRoot || node.metadata.imageBatchAsVersions || !node.metadata.batchChildIds?.length || node.metadata.taskId) return node;
                           // 本次会话正在生成的批次由它自己的请求维护；后到快照只重算含本轮恢复节点的批次。
                           if (isLiveRequestNode(node.id) || (lateClaims && !node.metadata.batchChildIds.some((id) => recoveredNodeIds.has(id)))) return node;
                           const children = node.metadata.batchChildIds.map((id) => current.find((item) => item.id === id)).filter(Boolean) as CanvasNodeData[];
@@ -649,6 +656,16 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         if (projectLoaded) lateRecoveryRef.current?.();
     }, [nodes, projectLoaded]);
 
+    // A task may have been durably bound before the previous page could update its visible owner.
+    useEffect(() => {
+        if (!projectLoaded) return;
+        const next = reconcileCanvasImageVersionBatches(nodesRef.current);
+        if (next === nodesRef.current) return;
+        useCanvasStore.getState().updateProject(projectId, { nodes: next });
+        nodesRef.current = next;
+        setNodes(current => reconcileCanvasImageVersionBatches(current));
+    }, [nodes, nodesRef, projectId, projectLoaded, setNodes]);
+
     // 本地任务同样持久化在任务表中，优先由上面的任务恢复流程按 taskId 对账。
     // 这里只把没有持久任务身份的孤立 loading 快照标记为中断，避免覆盖已完成任务。
     useEffect(() => {
@@ -657,6 +674,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             let changed = false;
             const next = current.map((node) => {
                 const metadata = node.metadata;
+                if (metadata?.imageBatchAsVersions && !metadata.mediaVersionOwnerId) return node;
                 if (!metadata || metadata.status !== NODE_STATUS_LOADING || metadata.content || metadata.taskId || metadata.taskClientOperationId || metadata.agentGenerationContinuation?.status === "pending" || generationRequestsRef.current.has(node.id)) return node;
                 changed = true;
                 return {

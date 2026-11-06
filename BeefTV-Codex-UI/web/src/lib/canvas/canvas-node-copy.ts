@@ -65,6 +65,7 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     delete metadata.versionOfNodeId;
     delete metadata.versionLabel;
     delete metadata.versionPrimary;
+    delete metadata.mediaVersionOwnerId;
     delete metadata.upscaleBatch;
     if (metadata.upscale) metadata.upscale = structuredClone(metadata.upscale);
     metadata.generatedFromProcessingNodeId = remapOwnedNodeId(node.metadata?.generatedFromProcessingNodeId, idMap);
@@ -96,6 +97,7 @@ export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyM
     metadata.characterViewNodeIds = copiedCharacterViewNodeIds && Object.values(copiedCharacterViewNodeIds).some(Boolean)
         ? copiedCharacterViewNodeIds
         : undefined;
+    if (metadata.maskEdit) metadata.maskEdit = { ...metadata.maskEdit, sourceNodeId: remapReferenceId(metadata.maskEdit.sourceNodeId, idMap)! };
     metadata.emotionEdit = node.metadata?.emotionEdit ? {
         ...node.metadata.emotionEdit,
         sourceNodeId: remapReferenceId(node.metadata.emotionEdit.sourceNodeId, idMap)!,

@@ -33,24 +33,48 @@ export function fitNodeSize(width: number, height: number, maxWidth: number = ME
 }
 
 export function fitImageNodeToDecodedSize(node: CanvasNodeData, naturalWidth: number, naturalHeight: number): CanvasNodeData {
+    if (!Number.isFinite(naturalWidth) || !Number.isFinite(naturalHeight) || naturalWidth <= 0 || naturalHeight <= 0) return node;
     const metadata = node.metadata;
     const needsMetadata = metadata?.naturalWidth !== naturalWidth || metadata?.naturalHeight !== naturalHeight;
     const keepGeometry = metadata?.freeResize || metadata?.manualSize || metadata?.locked || metadata?.workflowSlot;
     // Batch spacing was calculated with these bounds. Image decoding must not
     // silently enlarge every card after the grid has already been placed.
     const isBatch = metadata?.isBatchRoot || metadata?.batchRootId;
-    const size = isBatch
+    const keepSavedBounds = keepsSavedMediaGeometry(node);
+    const size = keepSavedBounds
+        ? fitMediaSizeInsideBounds(naturalWidth, naturalHeight, node.width, node.height)
+        : isBatch
         ? fitNodeSize(naturalWidth, naturalHeight, node.width, node.height)
         : fitNodeSize(naturalWidth, naturalHeight);
-    // 保存的尺寸已经是原图比例、也没超出上限时只补记原图尺寸：比例照常校正，
-    // 但不再把已有成品的小图放大到最小尺寸（与 ensureMediaNodeMinimumSize 同一规则）。
+    // A finished card owns its saved footprint. Repair its aspect inside that
+    // footprint; late decoding must not enlarge a card after its neighbors were placed.
     const naturalRatio = naturalWidth / naturalHeight;
-    const keepsSavedSize = !isBatch && keepsSavedMediaGeometry(node)
-        && Math.abs(node.width / node.height - naturalRatio) <= naturalRatio * 0.01
-        && node.width <= MEDIA_NODE_FIT_MAX_SIZE.width && node.height <= MEDIA_NODE_FIT_MAX_SIZE.height;
+    const keepsSavedSize = keepSavedBounds && Math.abs(node.width / node.height - naturalRatio) <= naturalRatio * 0.01;
     const needsResize = !keepGeometry && !keepsSavedSize && (Math.abs(size.width - node.width) >= 1 || Math.abs(size.height - node.height) >= 1);
     if (!needsMetadata && !needsResize) return node;
     return { ...node, ...(needsResize ? size : {}), metadata: needsMetadata ? { ...metadata, naturalWidth, naturalHeight } : metadata };
+}
+
+function fitMediaSizeInsideBounds(width: number, height: number, boundWidth: number, boundHeight: number) {
+    const scale = Math.min(boundWidth / width, boundHeight / height);
+    return { width: width * scale, height: height * scale };
+}
+
+export function fitVideoNodeToDecodedSize(node: CanvasNodeData, naturalWidth: number, naturalHeight: number): CanvasNodeData {
+    if (!Number.isFinite(naturalWidth) || !Number.isFinite(naturalHeight) || naturalWidth <= 0 || naturalHeight <= 0) return node;
+    const metadata = node.metadata;
+    const needsMetadata = metadata?.naturalWidth !== naturalWidth || metadata?.naturalHeight !== naturalHeight;
+    const keepGeometry = metadata?.freeResize || metadata?.manualSize || metadata?.locked || metadata?.workflowSlot;
+    const naturalRatio = naturalWidth / naturalHeight;
+    // A correct saved frame may be deliberately small; decoding only repairs a wrong ratio.
+    const needsResize = !keepGeometry && (isDamagedMediaSize(node.width, node.height)
+        || Math.abs(node.width / node.height - naturalRatio) > naturalRatio * 0.01);
+    if (!needsMetadata && !needsResize) return node;
+    const size = keepsSavedMediaGeometry(node)
+        ? fitMediaSizeInsideBounds(naturalWidth, naturalHeight, node.width, node.height)
+        : fitNodeSize(naturalWidth, naturalHeight, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+    return { ...node, ...(needsResize ? size : {}),
+        metadata: needsMetadata ? { ...metadata, naturalWidth, naturalHeight } : metadata };
 }
 
 export function nodeSizeFromRatio(size: string, baseWidth: number, baseHeight: number) {
@@ -126,7 +150,9 @@ export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
     const nodeRatio = node.width / Math.max(1, node.height);
     // 修复旧版图生图无条件继承参考节点尺寸造成的比例错误，不覆盖自由拉伸或锁定布局。
     if (requestedSize && naturalWidth > 0 && naturalHeight > 0 && !node.metadata?.freeResize && !node.metadata?.locked && Math.abs(naturalRatio - nodeRatio) > 0.01) {
-        const alignedSize = fitNodeSize(naturalWidth, naturalHeight, requestedSize.width, requestedSize.height);
+        const alignedSize = keepsSavedMediaGeometry(node)
+            ? fitMediaSizeInsideBounds(naturalWidth, naturalHeight, node.width, node.height)
+            : fitNodeSize(naturalWidth, naturalHeight, requestedSize.width, requestedSize.height);
         width = alignedSize.width;
         height = alignedSize.height;
     }

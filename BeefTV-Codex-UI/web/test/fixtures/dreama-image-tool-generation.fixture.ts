@@ -178,7 +178,9 @@ function setup() {
     expect(portrait.metadata?.imageTool).toBeUndefined();
     expect(portrait.metadata?.composerContent).toBe("@图片1");
     await tools.generateAngleNode(source, { horizontalAngle: 45, pitchAngle: 0, cameraDistance: 4.8, wideAngle: false });
-    expect(directDispatches).toBe(1);
-    expect(dispatched).toHaveLength(0);
-    console.log("PASS: non-Dreama tools retain their existing execution and texture controls");
+    expect(directDispatches).toBe(0);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0].generationContext.referenceImages.map((image: any) => image.id)).toEqual([source.id]);
+    expect(dispatched[0].generationContext.dreamaVoiceProviderOptions).toBeUndefined();
+    console.log("PASS: angle submits the original reference through the coordinator on other image channels");
 }

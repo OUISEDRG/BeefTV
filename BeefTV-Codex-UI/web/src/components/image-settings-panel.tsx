@@ -1,6 +1,6 @@
 import { ImageSizePicker } from "./image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ConfigProvider } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 
@@ -12,6 +12,7 @@ import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/us
 import { seedreamFamily } from "@/lib/seedream-image";
 import { SeedreamSettings } from "./seedream-settings";
 import { declaredGenerationConfigError } from "@/lib/declared-generation-config";
+import { canvasImageGenerationCountOptions, resolveCanvasImageGenerationCount } from "@/lib/canvas/canvas-image-generation-count";
 
 const qualityOptions = [
     { value: "auto", label: "自动" },
@@ -57,10 +58,9 @@ type ImageSettingsPanelProps = {
     showCount?: boolean;
     className?: string;
     maxCount?: number;
-    quickCount?: number;
 };
 
-export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showQuality = true, showTransparent = true, showSize = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3 }: ImageSettingsPanelProps) {
+export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showQuality = true, showTransparent = true, showSize = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15 }: ImageSettingsPanelProps) {
     const profile = mergedImageCapabilityConfig(config, config.model || config.imageModel);
     const selectedModel = config.model || config.imageModel;
     const declaredResolution = Boolean(resolveModelChannel(config, selectedModel).modelProfiles?.find((item) => item.model === modelOptionName(selectedModel))?.imageCapabilitiesVersion?.trim());
@@ -68,9 +68,9 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const normalized = normalizeImageValue(profile, config);
     const quality = declaredResolution ? config.quality || normalized.quality : normalized.quality;
     const transparentBackground = normalized.transparentBackground === "true";
-    const batchCounts = profile.generationOutputs?.filter((value) => value <= maxCount);
-    const effectiveMaxCount = Math.min(maxCount, batchCounts?.length ? Math.max(...batchCounts) : profile.maxOutputs);
-    const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
+    const batchCounts = canvasImageGenerationCountOptions(profile, maxCount);
+    const effectiveMaxCount = batchCounts[batchCounts.length - 1];
+    const count = resolveCanvasImageGenerationCount(profile, config.count, maxCount);
     const activeSize = declaredResolution ? config.size || normalized.size : normalized.size;
     const parameterError = declaredGenerationConfigError(config, "image");
     const activeQualityOptions = profile.quality.values.map((value) => qualityOptions.find((item) => item.value === value) || { value, label: value });
@@ -114,25 +114,19 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </span>
                 </div> : null}
                 {seedream ? <SeedreamSettings config={config} family={seedream} profile={profile} onChange={onConfigChange} theme={theme} /> : showSize ? <ImageSizePicker profile={profile} size={activeSize} quality={quality} declaredResolution={declaredResolution} onChange={(size, nextQuality) => applyImageSizeSelection(onConfigChange, size, nextQuality)} /> : null}
-                {showCount && profile.fixedOutputs ? (
+                {showCount && profile.fixedOutputs && profile.fixedOutputs > 1 ? (
                     <div className="space-y-2">
                         <SettingTitle color={theme.node.muted}>{seedream ? "生成批次" : "生成张数"}</SettingTitle>
                         <div className="grid grid-cols-3 gap-1.5">
-                            {(batchCounts?.length ? batchCounts : [profile.fixedOutputs]).map((value) => <OptionPill key={value} selected={count === value} theme={theme} onClick={() => onConfigChange("count", String(value))}>{value}</OptionPill>)}
+                            {batchCounts.map((value) => <OptionPill key={value} selected={count === value} theme={theme} onClick={() => onConfigChange("count", String(value))}>{value}</OptionPill>)}
                         </div>
                         <div className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>每批 {profile.fixedOutputs} 张，共 {count / profile.fixedOutputs} 批；按实际批次计费</div>
                     </div>
                 ) : showCount && effectiveMaxCount > 1 ? (
                     <div className="space-y-2">
                         <SettingTitle color={theme.node.muted}>{seedream ? "生成批次" : "生成张数"}</SettingTitle>
-                        <div className="grid grid-cols-4 gap-1.5">
-                            {Array.from({ length: Math.min(quickCount, effectiveMaxCount) }, (_, index) => index + 1).map((value) => (
-                                <OptionPill key={value} selected={count === value} theme={theme} onClick={() => onConfigChange("count", String(value))}>
-                                    {value}
-                                </OptionPill>
-                            ))}
-                            <CountInput value={count} quickCount={quickCount} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value || 1))} />
-                        </div>
+                        <CountInput value={count} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value))} />
+                        <div className="text-[var(--fs-label)]" style={{ color: theme.node.muted }}>{seedream ? `可选 1–${effectiveMaxCount} 批` : `可选 1–${effectiveMaxCount} 张，结果保存为历史版本`}</div>
                     </div>
                 ) : null}
             </div>
@@ -188,31 +182,45 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
     );
 }
 
-function CountInput({ value, quickCount, max, theme, onChange }: { value: number; quickCount: number; max: number; theme: CanvasTheme; onChange: (value: number | null) => void }) {
-    const commit = (input: HTMLInputElement) => {
-        const next = Math.max(1, Math.min(max, Math.floor(Number(input.value) || 1)));
-        input.value = String(next);
-        onChange(next);
+function CountInput({ value, max, theme, onChange }: { value: number; max: number; theme: CanvasTheme; onChange: (value: number) => void }) {
+    const [draft, setDraft] = useState(String(value));
+    useEffect(() => setDraft(String(value)), [value]);
+    const parsed = Number(draft);
+    const current = Math.max(1, Math.min(max, Number.isFinite(parsed) ? Math.floor(parsed) : value));
+    const commit = (next = current) => {
+        const bounded = Math.max(1, Math.min(max, next));
+        setDraft(String(bounded));
+        if (bounded !== value) onChange(bounded);
     };
+    const buttonClassName = "h-8 w-9 shrink-0 rounded-full text-base hover:brightness-110 focus-visible:outline focus-visible:outline-1 disabled:cursor-not-allowed disabled:opacity-40";
     return (
-        <label className="flex h-8 overflow-hidden rounded-full text-xs" style={{ background: theme.toolbar.itemHover, color: theme.node.text }}>
+        <div className="flex h-8 w-[168px] items-center overflow-hidden rounded-full text-xs" data-canvas-no-zoom
+            style={{ background: theme.toolbar.itemHover, color: theme.node.text }} onKeyDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
+            <button type="button" aria-label="减少生成张数" className={buttonClassName} disabled={current <= 1}
+                onMouseDown={event => event.preventDefault()} onClick={() => commit(current - 1)}>−</button>
             <input
-                key={value > quickCount ? `custom-${value}` : "quick"}
                 type="number"
                 min={1}
                 max={max}
+                step={1}
                 aria-label="自定义生成张数"
-                placeholder="输入"
-                className="min-w-0 flex-1 bg-transparent px-2 text-center outline-none placeholder:text-current placeholder:opacity-55 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="min-w-0 flex-1 bg-transparent px-2 text-center outline-none focus-visible:underline [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
-                defaultValue={value > quickCount ? value : ""}
-                onBlur={(event) => commit(event.currentTarget)}
+                value={draft}
+                onChange={event => setDraft(event.target.value)}
+                onBlur={() => commit()}
                 onKeyDown={(event) => {
                     if (event.key === "Enter") event.currentTarget.blur();
+                    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                        event.preventDefault();
+                        commit(current + (event.key === "ArrowUp" ? 1 : -1));
+                    }
                 }}
                 onMouseDown={(event) => event.stopPropagation()}
             />
-        </label>
+            <button type="button" aria-label="增加生成张数" className={buttonClassName} disabled={current >= max}
+                onMouseDown={event => event.preventDefault()} onClick={() => commit(current + 1)}>＋</button>
+        </div>
     );
 }
 
