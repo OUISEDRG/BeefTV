@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from tests.test_bridge import FakeGateway,request
 from bridge import Bridge,BridgeError
+from tests.fixtures_budget import FundedBridge as Bridge
 
 class GenerationGateway(FakeGateway):
     def __init__(self): super().__init__(); self.task_id=0; self.price=100; self.response={'status':1,'urls':[]}
@@ -35,7 +36,7 @@ class GenerationTests(unittest.TestCase):
         self.g.price=120
         with self.assertRaises(BridgeError): self.flow.approve('job-1',self.job['quoteId'],100)
         self.assertNotIn('paid-submit',self.g.calls)
-        job=self.b.get('job-1'); self.assertEqual(job['pointsEstimate'],120)
+        job=self.b.get('job-1'); self.assertEqual(job['pointsEstimate'],'120')
         self.assertNotEqual(job['quoteId'],self.job['quoteId'])
     def test_pending_failure_and_success_with_verified_file(self):
         self.flow.approve('job-1',self.job['quoteId'],100)
@@ -55,8 +56,11 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(self.b.get('job-1')['taskId'],987)
         self.assertEqual(self.g.calls.count('paid-submit'),1)
     def test_failed_cancelled_and_missing_video_never_report_completed(self):
-        self.flow.approve('job-1',self.job['quoteId'],100)
         for upstream,expected in [(3,'download_failed'),(4,'failed'),(5,'cancelled')]:
-            job=self.b.get('job-1'); job['status']='queued'; self.b.update('job-1',job)
-            self.g.response={'status':upstream,'urls':[]}; self.flow.poll('job-1')
-            self.assertEqual(self.b.get('job-1')['status'],expected)
+            self.g.task_id=0
+            key='outcome-'+str(upstream)
+            job=self.b.prepare(request(),key)
+            self.flow.approve(key,job['quoteId'],100)
+            self.g.response={'status':upstream,'urls':[]}
+            self.flow.poll(key)
+            self.assertEqual(self.b.get(key)['status'],expected)

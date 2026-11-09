@@ -15,8 +15,10 @@ class CapabilityTransportTests(unittest.TestCase):
         videos = json.loads((root / 'extension-catalog.json').read_text('utf-8'))['items']
 
         def cli(command, **kwargs):
+            if command[1:] == ['version']:
+                return SimpleNamespace(returncode=0, stdout='Dreama cli 1.0.5 env=prod endpoint=https://jzzm.duanju.com/gw')
             self.assertEqual(command[1:3], ['capability', 'list'])
-            kind = command[command.index('--kind') + 1]
+            kind = next(arg.split('=',1)[1] for arg in command if arg.startswith('--kind='))
             rows = images if kind == 'image' else videos
             if '--raw' in command:
                 body = {'code': '0', 'msg': 'success', 'result': {'items': rows, 'totalCount': len(rows)}, 'traceId': 'test'}
@@ -27,7 +29,7 @@ class CapabilityTransportTests(unittest.TestCase):
                 body = {'ok': True, 'code': '0', 'result': {'items': projected}}
             return SimpleNamespace(returncode=0, stdout=json.dumps(body))
 
-        with patch('bridge.subprocess.run', side_effect=cli), patch('extension.ExtensionGateway._request', return_value={'items': videos}):
+        with patch('dreama_cli.subprocess.run', side_effect=cli), patch('extension.ExtensionGateway._request', return_value={'items': videos}):
             snapshots = DreamaGateway().catalogs()
             channels = {channel['id']: channel for channel in build_channels(snapshots)}
         profiles = channels['dreama-image-generation']['modelProfiles']
@@ -45,13 +47,15 @@ class CapabilityTransportTests(unittest.TestCase):
             {'code': '0', 'ok': True, 'result': {'items': 'not-a-list'}},
         ]
         for body in invalid:
-            with self.subTest(body=body), patch('bridge.subprocess.run', return_value=SimpleNamespace(returncode=0, stdout=json.dumps(body))):
+            with self.subTest(body=body), patch('dreama_cli.DreamaCliClient.check_version'), patch('dreama_cli.subprocess.run', return_value=SimpleNamespace(returncode=0, stdout=json.dumps(body))):
                 with self.assertRaises(BridgeError):
                     DreamaGateway()._invoke('capability', 'list', '--kind', 'image')
 
     def test_non_capability_commands_keep_agent_envelope(self):
         def cli(command, **kwargs):
+            if command[1:] == ['version']:
+                return SimpleNamespace(returncode=0, stdout='Dreama cli 1.0.5 env=prod endpoint=https://jzzm.duanju.com/gw')
             self.assertNotIn('--raw', command)
             return SimpleNamespace(returncode=0, stdout=json.dumps({'ok': True, 'code': '0', 'result': {'userId': 17}}))
-        with patch('bridge.subprocess.run', side_effect=cli):
+        with patch('dreama_cli.subprocess.run', side_effect=cli):
             self.assertEqual(DreamaGateway().identity(), {'userId': 17})

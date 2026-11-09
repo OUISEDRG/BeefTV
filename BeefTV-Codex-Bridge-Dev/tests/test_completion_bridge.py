@@ -44,7 +44,8 @@ class BridgeTests(unittest.TestCase):
     def make(self, events):
         def factory():
             rpc = FakeRPC(events); self.instances.append(rpc); return rpc
-        self.bridge = CompletionBridge(factory, models=['gpt-6-astra'], timeout=0.1)
+        self.bridge = CompletionBridge(factory, models=['gpt-6-astra'], timeout=0.1,
+                                       authorize_submission=lambda: None)
         return self.bridge
     def tearDown(self):
         if hasattr(self, 'bridge'): self.bridge.close()
@@ -52,6 +53,11 @@ class BridgeTests(unittest.TestCase):
         return {'model':'gpt-6-astra','messages':[{'role':'user','content':'原样  不修改\n你好'}], **extra}
     def consume(self, payload):
         return self.bridge.complete(payload)
+    def test_new_completion_is_closed_by_default(self):
+        self.bridge = CompletionBridge(lambda: self.fail('Default bridge must not start RPC'), ['gpt-6-astra'])
+        with self.assertRaises(BridgeError) as denied:
+            self.bridge.complete(self.request())
+        self.assertEqual((denied.exception.status, denied.exception.code), (409, 'budget_not_configured'))
     def test_exact_text_and_json_response(self):
         self.make([delta('你好'), delta('世界'), done()])
         response = self.consume(self.request())
@@ -75,6 +81,25 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(rpc.replies, [(101,[{'type':'inputText','text':'{"nodeId":"n1"}'}],True)])
         self.assertEqual(len(self.instances), 1)
         self.assertEqual(self.consume(continuation), result)
+        self.assertEqual(len(rpc.replies), 1)
+    def test_revoked_budget_allows_existing_tool_result_and_original_replay(self):
+        self.make([tool()])
+        request = self.request(tools=TOOLS)
+        first = self.bridge.complete(request, idempotency_key='original')
+        rpc = self.instances[0]
+        self.bridge.authorize_submission = None
+        self.assertEqual(self.bridge.complete(request, idempotency_key='original'), first)
+        message = first['choices'][0]['message']
+        follow = copy.deepcopy(request)
+        follow['messages'] += [message, {'role':'tool','tool_call_id':message['tool_calls'][0]['id'],
+                                         'content':'existing tool completed'}]
+        rpc.events.put(delta('已完成')); rpc.events.put(done())
+        self.assertEqual(self.bridge.complete(follow)['choices'][0]['message']['content'], '已完成')
+        with self.assertRaises(BridgeError) as denied:
+            self.bridge.complete(self.request(), idempotency_key='new')
+        self.assertEqual(denied.exception.code, 'budget_not_configured')
+        self.assertEqual(len(self.instances), 1)
+        self.assertEqual(len(rpc.started), 1)
         self.assertEqual(len(rpc.replies), 1)
     def test_wrong_context_and_tools_rejected_before_reply(self):
         self.make([tool()])

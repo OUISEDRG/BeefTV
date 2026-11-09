@@ -1,11 +1,11 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ClipboardEvent, DragEvent, FocusEvent, KeyboardEvent, MouseEvent, TextareaHTMLAttributes } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ClipboardEvent, DragEvent, FocusEvent, KeyboardEvent, MouseEvent, Ref, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { usePersonalAssetLibrary } from "@/hooks/use-personal-asset-library";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
-import { buildAssetMentionReferences, canvasResourceDisplayName, canvasResourceMentionToken, canvasResourceReferenceInsertText, findCanvasResourceAutoLinkMatch, referencedAssetIdsInPrompt, type CanvasResourceAutoLinkMatch, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { buildAssetMentionReferences, canvasResourceDisplayName, canvasResourceMentionToken, canvasResourceReferenceInsertText, findCanvasResourceAutoLinkMatch, hasCanvasMentionBoundary, referencedAssetIdsInPrompt, type CanvasResourceAutoLinkMatch, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { replaceCanvasReferenceToken, type CanvasReferenceAction, type CanvasReferenceIssue } from "@/lib/canvas/canvas-reference-issues";
 import {
     clamp,
@@ -20,6 +20,7 @@ import {
     serializeEditableValue,
     setEditableSelection,
     syncInlineMentionPreviews,
+    type EditableSelection,
 } from "./canvas-mention-editable-dom";
 import { InlineReferencePreview, MentionMenu } from "./canvas-resource-mention-menu";
 import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resource-references";
@@ -53,13 +54,14 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     selectedAssetReferences?: CanvasResourceReference[];
     referenceAction?: CanvasReferenceAction | null;
     onReferenceActionHandled?: () => void;
+    connectedReferenceInsertionRef?: Ref<(reference: CanvasResourceReference) => void>;
 };
 
 const EMPTY_ISSUES: CanvasReferenceIssue[] = [];
 const EMPTY_REFERENCES: CanvasResourceReference[] = [];
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, nodeSectionLabel = "画布节点", referenceIssues = EMPTY_ISSUES, selectedAssetReferences = EMPTY_REFERENCES, referenceAction, onReferenceActionHandled, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, nodeSectionLabel = "画布节点", referenceIssues = EMPTY_ISSUES, selectedAssetReferences = EMPTY_REFERENCES, referenceAction, onReferenceActionHandled, connectedReferenceInsertionRef, ...props },
     forwardedRef,
 ) {
     const rawTheme = useActiveTheme();
@@ -70,6 +72,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const editorRef = useRef<HTMLDivElement | null>(null);
     const composingRef = useRef(false);
     const pendingSelectionRef = useRef<number | null>(null);
+    const blurredSelectionRef = useRef<{ value: string; selection: EditableSelection } | null>(null);
     const pendingScrollTopRef = useRef<number | null>(null);
     const lastRenderedValueRef = useRef("");
     const lastIssueKeyRef = useRef("");
@@ -298,11 +301,30 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         }
     }, [referenceAction, value]);
 
+    const currentEditorSelection = () => {
+        const textarea = textareaRef.current;
+        return getEditableSelection(editorRef.current)
+            ?? (textarea ? { start: textarea.selectionStart, end: textarea.selectionEnd } : null);
+    };
+
+    useImperativeHandle(connectedReferenceInsertionRef, () => (reference) => {
+        if (!reference.active || composingRef.current) return;
+        const previous = blurredSelectionRef.current;
+        const { start, end } = currentEditorSelection()
+            ?? (previous?.value === value ? previous.selection : null)
+            ?? { start: value.length, end: value.length };
+        const leadingSpace = start === value.length && start > 0 && !/\s$/.test(value) ? " " : "";
+        const trailingSpace = end === value.length || !hasCanvasMentionBoundary(value, end) ? " " : "";
+        const insertText = `${leadingSpace}${canvasResourceMentionToken(reference)}${trailingSpace}`;
+        closeMention();
+        setAutoLinkCursor(null);
+        focusMentionEditorSurface(editorRef.current, textareaRef.current);
+        updateValue(value.slice(0, start) + insertText + value.slice(end), start + insertText.length);
+    });
+
     const replaceEditableSelection = (insertText: string) => {
         const currentValue = editorRef.current ? serializeEditableValue(editorRef.current) : value;
-        const textarea = textareaRef.current;
-        const selection = getEditableSelection(editorRef.current)
-            || (textarea ? { start: textarea.selectionStart, end: textarea.selectionEnd } : null)
+        const selection = currentEditorSelection()
             || { start: currentValue.length, end: currentValue.length };
         const next = `${currentValue.slice(0, selection.start)}${insertText}${currentValue.slice(selection.end)}`;
         const cursor = selection.start + insertText.length;
@@ -374,6 +396,10 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const handleEditorBlur = (event: FocusEvent<HTMLElement>) => {
+        if (connectedReferenceInsertionRef) {
+            const selection = currentEditorSelection();
+            blurredSelectionRef.current = selection ? { value, selection } : null;
+        }
         setAutoLinkCursor(null);
         const anchor = event.currentTarget;
         if (interactingWithMenuRef.current) return;

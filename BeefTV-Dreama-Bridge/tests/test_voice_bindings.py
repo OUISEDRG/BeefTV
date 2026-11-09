@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import copy
 import hashlib
 import json
@@ -11,6 +12,7 @@ import audio_flow as audio
 import extension
 import voice_bindings as voices
 from bridge import Bridge, BridgeError, DreamaGateway, PROJECT, SERIES, validate_request
+from tests.fixtures_budget import FundedBridge as Bridge
 from tests.test_bridge import FakeGateway, request
 
 URL = 'https://jzinnovation.jxbaobian.cn/resourceBucket/audio/personal.mp3'
@@ -86,10 +88,10 @@ class BindingValidationTests(unittest.TestCase):
         response = Mock(status_code=200, content=b'{}')
         for duration, size in [('NaN', '2'), (True, '2'), ('4', '1.5'), ('4', -1), ('4', True)]:
             response.json.return_value = {'format': {'duration': duration, 'size': size}}
-            with patch.object(voices.requests, 'get', return_value=response), self.assertRaises(BridgeError):
+            with patch('dreama_compat.voice.requests.get', return_value=response), self.assertRaises(BridgeError):
                 voices.media_info(URL)
         response.json.return_value = {'format': {'duration': '4.000000', 'size': '352844'}}
-        with patch.object(voices.requests, 'get', return_value=response):
+        with patch('dreama_compat.voice.requests.get', return_value=response):
             self.assertEqual(voices.media_info(URL), {'duration': 4, 'bytes': 352844})
 
     def test_slot_is_explicit_unique_and_sources_exclusive(self):
@@ -255,7 +257,7 @@ class ExtensionVoiceTests(unittest.TestCase):
         job = {'model': MODEL, 'kind': 'extension', 'status': 'submitting', 'approvedAt': 1,
             'approvedPoints': 10, 'pointsEstimate': 10, 'sourceVideoUrl': SOURCE,
             'sourceVideo': {'duration': 4, 'bytes': 100}, 'references': [ref],
-            'promptReferenceIndexes': [0, 0], 'duration': 4, 'storyboardId': 100}
+            'promptReferenceIndexes': [0, 0], 'duration': 4, 'storyboardId': 100, **intent_fields(10)}
         saved = '<p>'+tag(1)+tag(3)+'</p>'
         text, draft = extension.extension_draft(job, {'videoPrompt': saved})
         assets = json.loads(draft)['workspaces']['extend']['referenceAssets']

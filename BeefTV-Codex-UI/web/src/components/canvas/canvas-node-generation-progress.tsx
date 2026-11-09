@@ -40,6 +40,8 @@ export function CanvasNodeGenerationProgress({ node, theme, operation, onOpenTas
     const timing = metrics?.timing || (!fetching ? elapsed : "");
     const uncertain = !operation && Boolean(taskId) && isGenerationTaskSubmissionUncertain(displayTask);
     const controls = hasTaskIdentity && (!operation || displayTask.status !== "succeeded");
+    const canStop = displayTask.status === "succeeded"
+        || (!node.metadata?.taskGenerationCancelUnsupported && ["queued", "running"].includes(displayTask.status));
 
     return <div role="status" aria-label={title} className="flex h-full w-full flex-col items-center justify-center gap-3 px-5 text-center" style={{ background: theme.node.fill, color: theme.node.activeStroke }}>
         {uncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2 motion-reduce:animate-none" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
@@ -57,7 +59,7 @@ export function CanvasNodeGenerationProgress({ node, theme, operation, onOpenTas
             {timing ? <span className="whitespace-nowrap text-[var(--fs-tiny)] tabular-nums" style={{ color: theme.node.muted }}>{timing.startsWith("已用") ? <Clock3 className="mr-1 inline size-3 align-[-2px]" /> : null}{timing}</span> : null}
             {controls ? <div className="mt-0.5 flex items-center gap-1.5">
                 <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.toolbar.itemHover, color: theme.node.text }} onMouseDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onOpenTaskDetails?.(node); }}><FileText className="size-3" />详情</button>
-                {onCancelTask && ["queued", "running", "succeeded"].includes(displayTask.status) ? <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }} onMouseDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCancelTask(node); }} aria-label={displayTask.status === "succeeded" ? "停止取回结果" : "取消生成任务"}><Square className="size-3" />{displayTask.status === "succeeded" ? "停止取回" : "取消"}</button> : null}
+                {onCancelTask && canStop ? <button type="button" className="inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }} onMouseDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onCancelTask(node); }} aria-label={displayTask.status === "succeeded" ? "停止取回结果" : "取消生成任务"}><Square className="size-3" />{displayTask.status === "succeeded" ? "停止取回" : "取消"}</button> : null}
             </div> : null}
         </div> : null}
     </div>;

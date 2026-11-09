@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "taskId", "artifactId", "resourceId", "outputIndex", "sha256", "sizeBytes", "acknowledgedAt"],
+  "properties": {"schemaVersion": {"const": 1}, "taskId": {"type": "string", "minLength": 1}, "artifactId": {"type": "string", "minLength": 1},
+    "resourceId": {"type": "string", "minLength": 1}, "outputIndex": {"type": "integer", "minimum": 0},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "sizeBytes": {"type": "integer", "minimum": 1},
+    "acknowledgedAt": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9]{2}:[0-9]{2})$"}}
+}

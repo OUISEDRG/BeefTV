@@ -23,6 +23,18 @@ function render(node: CanvasNodeData) {
 
 const loadingVideo: CanvasNodeData = { id: "video-1", type: CanvasNodeType.Video, title: "镜头", position: { x: 0, y: 0 }, width: 320, height: 220, metadata: { status: "loading", taskId: "task-1", taskStatus: "succeeded" } };
 
+test("generation cancellation capability leaves result retrieval controls available", () => {
+    const metadata = { ...loadingVideo.metadata, taskGenerationCancelUnsupported: true };
+    for (const taskStatus of ["queued", "running"] as const) {
+        const unsupported = render({ ...loadingVideo, metadata: { ...metadata, taskStatus } });
+        expect(unsupported).not.toContain("取消生成任务");
+        expect(unsupported).toContain("详情");
+        const supported = render({ ...loadingVideo, metadata: { ...metadata, taskStatus, taskGenerationCancelUnsupported: false } });
+        expect(supported).toContain("取消生成任务");
+    }
+    expect(render({ ...loadingVideo, metadata })).toContain("停止取回结果");
+});
+
 test("取回结果时节点显示进度、大小和速度，而不是「生成中」", () => {
     byTask["task-1"] = { outputIndex: 0, downloadedBytes: 12_900_000, totalBytes: 41_943_040, bytesPerSecond: 1_258_291, state: "downloading", updatedAt: Date.now() };
     const markup = render(loadingVideo);

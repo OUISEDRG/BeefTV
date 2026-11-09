@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 29
+const CurrentSchemaVersion int64 = 30
 
 type localSchemaMigration struct {
 	Version   int64 `gorm:"primaryKey;autoIncrement:false"`
@@ -52,6 +52,7 @@ func LocalModels() []any {
 		&model.Skill{}, &model.SkillVersion{}, &model.SkillFile{}, &model.UserSkillState{},
 		&model.Resource{}, &model.ResourceDeletionJob{}, &model.UserDailyUploadUsage{}, &model.UserUploadReservation{}, &model.ArkPrivateAssetBinding{},
 		&model.Asset{}, &model.AssetFolder{}, &model.AssetVersion{}, &model.AssetRepresentation{},
+		&model.MediaDeliveryAck{},
 		&model.ProjectAssetLink{}, &model.ProjectAssetFolder{}, &model.ProjectAssetCandidate{},
 		&model.VoiceProfile{}, &model.CharacterVoiceBinding{},
 		&model.Project{}, &model.ProjectFolder{}, &model.StyleProfile{}, &model.ProjectUnit{}, &model.CanvasUnitLink{},
@@ -144,6 +145,9 @@ func canonicalLocalMigrations() []localMigration {
 		}},
 		{version: 29, name: "local-admin-audit", apply: func(tx *gorm.DB) error {
 			return tx.AutoMigrate(&model.AdminAuditEvent{})
+		}},
+		{version: 30, name: "bridge-media-delivery-ack", apply: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&model.MediaDeliveryAck{})
 		}},
 	}
 }

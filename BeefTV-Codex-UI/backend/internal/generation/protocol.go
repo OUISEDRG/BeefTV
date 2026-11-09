@@ -50,6 +50,10 @@ func RunProtocolAdapterTaskWithPolicy(ctx context.Context, input Input, adapter 
 	// create、poll、download 是同一个外部任务的三个阶段：任一阶段失败都向上返回真实错误，
 	// 不把“已提交但结果未知”伪装成成功，也不把下载失败降级成空结果。
 	request := ProtocolRequestFromInput(input)
+	if acknowledger, ok := adapter.(protocol.MediaAckAdapter); ok && acknowledger.MediaAckAvailable() {
+		call, _ := CallMetaFromContext(ctx)
+		request.Extra["beefTaskId"] = call.TaskID
+	}
 	taskID := ResumedProviderRequestID(ctx)
 	var created protocol.CreateResult
 	if taskID == "" {
@@ -136,7 +140,7 @@ func RunProtocolAdapterTaskWithPolicy(ctx context.Context, input Input, adapter 
 		if err != nil {
 			return VideoPollOutcome{}, err
 		}
-		body, err := ExecuteProtocolRequest(WithRequestKind(ctx, "poll"), input.Config, spec)
+		body, err := ExecuteProtocolRequest(WithRequestKind(pinProtocolReceipt(ctx, adapter, taskID), "poll"), input.Config, spec)
 		if err != nil {
 			return VideoPollOutcome{}, err
 		}
@@ -156,6 +160,17 @@ func RunProtocolAdapterTaskWithPolicy(ctx context.Context, input Input, adapter 
 		}
 		return VideoPollOutcome{}, nil
 	})
+}
+
+func pinProtocolReceipt(ctx context.Context, adapter protocol.Adapter, taskID string) context.Context {
+	acknowledger, supportsAck := adapter.(protocol.MediaAckAdapter)
+	runtime, hasRuntime := RuntimeFromContext(ctx)
+	if !hasRuntime || !supportsAck || !acknowledger.MediaAckAvailable() {
+		return ctx
+	}
+	runtime.Call.ProviderRequestID = taskID
+	runtime.Call.PinnedReceipt = true
+	return WithRuntime(ctx, runtime)
 }
 
 func ExtractProviderTaskID(body []byte) (string, error) {
@@ -179,16 +194,16 @@ func ExtractProviderTaskID(body []byte) (string, error) {
 	return "", err
 }
 
-// queryProtocolAdapterVideoTask 只读取一次已有的声明式 Provider 任务。
+// QueryProtocolAdapterTask 只读取一次已有的声明式 Provider 任务。
 // 人工恢复走此路径，因此检查本地失败任务时绝不会创建第二个上游任务。
-func QueryProtocolAdapterVideoTask(ctx context.Context, input Input, adapter protocol.Adapter, taskID string) (map[string]interface{}, string, error) {
+func QueryProtocolAdapterTask(ctx context.Context, input Input, adapter protocol.Adapter, taskID string) (map[string]interface{}, string, error) {
 	request := ProtocolRequestFromInput(input)
 	pollContext := protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}
 	spec, err := adapter.BuildPoll(ctx, pollContext)
 	if err != nil {
 		return nil, "", err
 	}
-	body, err := ExecuteProtocolRequest(WithRequestKind(ctx, "poll"), input.Config, spec)
+	body, err := ExecuteProtocolRequest(WithRequestKind(pinProtocolReceipt(ctx, adapter, taskID), "poll"), input.Config, spec)
 	if err != nil {
 		return nil, "", err
 	}

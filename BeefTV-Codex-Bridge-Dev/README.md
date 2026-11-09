@@ -83,6 +83,12 @@ v1.3 的自动化验证覆盖图片请求校验、异步任务状态、持久幂
 
 工具链中服务重启、等待过期或断连会明确报错，不自动重新推理或重放工具。服务允许多任务，各任务隔离，最多 8 条活动链。BeefTV 自带助手有 95 秒无实质输出超时，桥接转发真实文本和公开思考摘要以显示进度。
 
-Codex 升级后如旧可执行文件被移走，可更新 `runtime-config.json` 的 `codexExecutable` 为 `Get-Command codex` 返回的路径，之后重启服务。
+`runtime-config.json` 可以用绝对路径 `codexExecutable` 固定版本，或用绝对路径 `codexInstallRoot` 指向受信任的 Codex 安装目录。未固定版本或固定文件已不存在时，启动器在安装目录及其下一层查找 Codex，按文件修改时间从新到旧验证 `--version`。启动时确定一个 EXE，供账号、模型目录、文本和图片 RPC 共用。配置 `codexHome` 时，RPC 使用该目录和其中的 `.tmp`。修改现有运行配置前先备份并核对原文件摘要。
+
+图片预算未配置时，新图片任务返回 `budget_not_configured`。已创建任务的原幂等键、查询、取消和媒体读取可继续使用。可能已开始的原生请求在失去回执时保留 `submission_unknown`，现有 Provider 的 `status` 仍返回兼容的终止值 `failed`。已获知的原生 thread 和 turn 保存在 `nativeReceipt`，供原任务对账。SQLite 迁移保留历史记录，索引输出的 SHA256 和大小。读取结果时复核文件和记录。
+
+已开始的图片任务在收到取消请求后保留为运行中，直到原生事件确认原 turn 已中断。中断未确认时保留提交不明。图片在取消确认前完成时仍可取回。
+
+可信本机 Backend 可在图片创建时传入 `beefTaskId`。`POST /v1/images/jobs/{bridgeJobId}/ack` 需要现有 Bearer 凭证、稳定的 ACK `Idempotency-Key` 和 P1 媒体 ACK 字段。成功响应记录 `cleanupState: held`。同一 ACK 可安全重放，写入 ACK 后图片仍可读取。历史任务继续保留，直到存在可核对的交付回执及正式清理策略。
 
 参考：[官方 Codex app-server 文档](https://learn.chatgpt.com/docs/app-server)。

@@ -157,6 +157,7 @@ type CallMeta struct {
 	VideoSeconds      int
 	RequestKind       string
 	ProviderRequestID string
+	PinnedReceipt     bool
 	ConcurrencyLimit  int
 }
 

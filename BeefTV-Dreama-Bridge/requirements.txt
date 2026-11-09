@@ -1,3 +1,5 @@
 requests==2.34.2
 Pillow==12.3.0
 cryptography==50.0.2
+jsonschema==4.26.0
+tzdata==2026.6

@@ -43,6 +43,16 @@ Codex continues the existing turn. Do not initiate another turn for a pending to
 
 `turn/start.input` contains typed text/image inputs, not OpenAI role messages. The exposed `thread/resume.history` field is explicitly marked internal/unstable for Codex Cloud and is not used. Existing OpenAI history must be represented as clearly bounded role-labelled history data on first request; subsequent tool results use the native request/reply lifecycle. A persistent HTTP conversation can reuse a thread for later user turns. Main streaming events are `item/agentMessage/delta`, `item/completed`, and `turn/completed`. `start_turn` requests `summary=auto`. Progress summaries arrive as `item/reasoning/summaryTextDelta` with `params.delta`, `threadId`, `turnId`, `itemId`, and `summaryIndex`. Summary-part events are `item/reasoning/summaryPartAdded`. Use these summary events for progress; do not expose the separate raw `item/reasoning/textDelta` stream.
 
+### BeefTV Durable context tail (1.2.1)
+
+The installed host appends a transient user-role message after every request's transcript, including after tool results. Its serialized form contains the exact `<beeftv_plan>` / `<beeftv_studio>` sections and, when needed, the existing restored-skill block. The bridge recognizes only this final, complete format, removes it from conversation identity comparisons, and supplies it as task data beside the original user input or the matching native tool reply. The actual system/developer instructions, user messages, model, and tool set still have to match. Tool-result image carriers are resolved after removing this tail.
+
+Before 1.2.1, the tail hid each trailing tool result from continuation detection. Every tool round started another native session without returning its predecessor's result; eight pending sessions exhausted the local limit. The fix keeps a single native turn through repeated tools. Pending calls are never evicted to make capacity, and missing/expired call IDs never cause a new inference request. Validation/admission failures do not reserve an idempotency key indefinitely.
+
+`tests/test_studio_continuation.py` covers twelve sequential calls, changing plans, restored skills, tool images, distinct concurrent conversations, strict user/system binding, stale IDs, cached retries, conflicting results, capacity and admission. These tests use fake native transport and do not prove live model completion or media generation quality.
+
+New text turns and image jobs require budget authorization before starting native work. The runtime leaves authorization unset. Native token usage describes consumption and has no verified conversion into the points policy. Existing tool replies and cached requests stay bound to their original turn. Image lookup, cancellation and delivery ACK remain available for existing jobs.
+
 ## Tool isolation
 
 Do not rely only on `features.code_mode=false` or `features.multi_agent=false`. The installed catalog uses `tool_mode=code_mode_only`, `multi_agent_version=v2`, and `apply_patch_tool_type=freeform` for the chosen models. The bridge derives a catalog from this executable's bundled metadata, preserving model identity and instructions but changing only:

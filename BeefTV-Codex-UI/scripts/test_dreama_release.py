@@ -1,6 +1,7 @@
 """Release safety tests use only temporary fixtures, never installed data."""
 import importlib.util
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -153,6 +154,7 @@ class ReleaseTests(unittest.TestCase):
             root=Path(directory);repo=root/'source';bridge=root/'bridge';codex=root/'codex';build=root/'build'
             (repo/'backend/internal/database').mkdir(parents=True);bridge.mkdir();codex.mkdir()
             (repo/'backend/internal/database/local_schema.go').write_text('package database\nconst CurrentSchemaVersion int64 = 73\n')
+            (bridge/'media_delivery.py').write_text('LEDGER_SCHEMA_VERSION = 9\n')
             release.write_json(bridge/'dreama-modalities-manifest.json',{'id':'dreama-modalities','version':'1.2.0'})
             for path in (repo,bridge):
                 release.git(path,'init')
@@ -165,6 +167,160 @@ class ReleaseTests(unittest.TestCase):
             release.make_package(repo,bridge,codex,build,root/'package','v1.0.0','fixture')
             manifest=json.loads((root/'package/release.json').read_text())
             self.assertEqual(manifest.get('desktopSchemaVersion'),73)
+            self.assertEqual(manifest.get('ledgerSchemaVersion'),9)
+
+    def test_dual_bridge_package_exports_pinned_sources_and_both_plugins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, bridge, codex, build = (root / name for name in ('repo', 'bridge', 'codex', 'build'))
+            schema = repo / 'backend/internal/database/local_schema.go'
+            schema.parent.mkdir(parents=True)
+            schema.write_text('package database\nconst CurrentSchemaVersion int64 = 29\n')
+            bridge.mkdir()
+            (bridge / 'media_delivery.py').write_text('LEDGER_SCHEMA_VERSION = 6\n')
+            release.write_json(bridge / 'dreama-modalities-manifest.json', {
+                'id': 'dreama-modalities', 'version': '1.2.0',
+            })
+            release.write_json(codex / 'plugin/codex-images/manifest.json', {
+                'id': 'codex-images', 'version': '1.1.0',
+            })
+            (codex / '.gitignore').write_text('private.py\nstate/\n')
+            (codex / 'server.py').write_text('# tracked source\n')
+            (codex / 'image_ledger.py').write_text('SCHEMA_VERSION = 5\n')
+            (codex / 'private.py').write_text('# untracked runtime secret\n')
+            (codex / 'install_images.py').write_text(
+                'from pathlib import Path\nimport io, zipfile\n'
+                'def pack():\n'
+                '    output = io.BytesIO()\n'
+                '    with zipfile.ZipFile(output, "w") as archive:\n'
+                '        archive.writestr("manifest.json", Path("plugin/codex-images/manifest.json").read_bytes())\n'
+                '    return output.getvalue()\n'
+            )
+            for path in (repo, bridge, codex):
+                release.git(path, 'init')
+                release.git(path, 'config', 'core.autocrlf', 'true')
+                release.git(path, 'add', '.')
+                release.git(path, '-c', 'user.name=Release fixture', '-c', 'user.email=fixture@example.invalid',
+                            'commit', '-m', 'fixture')
+            (codex / 'server.py').write_bytes(b'# tracked source\r\n')
+            release.git(repo, 'tag', 'v1.0.0')
+            for name in ('BeefTV.exe', 'cli/beeftv.exe', 'agent-host/server.mjs',
+                         'agent-host/runtime/node.exe', 'agent-host/media-runtime/ffmpeg.exe'):
+                target = build / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b'fixture')
+            (build / 'plugin-packages').mkdir()
+            output = root / 'package'
+            release.make_package(repo, bridge, codex, build, output, 'v1.0.0', 'fixture', pin_codex=True)
+            manifest = json.loads((output / 'release.json').read_text('utf-8'))
+            self.assertEqual(manifest['codexCommit'], release.git(codex, 'rev-parse', 'HEAD'))
+            self.assertEqual(manifest['codexLedgerSchemaVersion'], 5)
+            self.assertEqual(manifest['ledgerSchemaVersion'], 6)
+            self.assertFalse((output / 'codex/private.py').exists())
+            self.assertTrue((output / 'codex/server.py').is_file())
+            self.assertEqual((output / 'codex/server.py').read_bytes(), b'# tracked source\n')
+            for name in ('dreamaPlugin', 'codexPlugin'):
+                plugin = manifest[name]
+                self.assertEqual(release.digest(output / 'app' / plugin['path']), plugin['sha256'])
+                with zipfile.ZipFile(output / 'app' / plugin['path']) as archive:
+                    self.assertEqual(json.loads(archive.read('manifest.json'))['id'], plugin['id'])
+
+    def test_dual_release_checks_codex_jobs_and_preserves_its_ledger_on_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, app, data, bridge, codex, manifest = self.desktop_fixture(root)
+            module = self.add_installed_member(package, codex, manifest, 'codex', 'server.py', b'new')
+            module.write_bytes(b'old')
+            manifest.update(codexCommit='reviewed', codexLedgerSchemaVersion=5)
+            release.write_json(package / 'release.json', manifest)
+            pin = release.digest(package / 'release.json')
+            ledger = codex / 'state/image-jobs.sqlite3'
+            ledger.parent.mkdir()
+            with closing(sqlite3.connect(ledger)) as db, db:
+                db.execute('CREATE TABLE jobs (id TEXT, status TEXT)')
+                db.execute("INSERT INTO jobs VALUES ('old-task', 'running')")
+            roots = []
+
+            def process_check(bridge=None):
+                roots.append(bridge)
+
+            with self.assertRaisesRegex(ValueError, 'Codex.*active'):
+                release.install(package, app, data, bridge, codex, root / 'backups',
+                                manifest_pin=pin, process_check=process_check)
+            self.assertIn(codex, roots)
+            self.assertEqual(module.read_bytes(), b'old')
+            with closing(sqlite3.connect(ledger)) as db, db:
+                db.execute("UPDATE jobs SET status='succeeded'")
+            backup = release.install(package, app, data, bridge, codex, root / 'backups',
+                                     manifest_pin=pin, process_check=process_check)
+            self.assertTrue((backup / 'image-jobs.sqlite3').is_file())
+            with closing(sqlite3.connect(ledger)) as db, db:
+                db.execute("INSERT INTO jobs VALUES ('new-task', 'succeeded')")
+            current = release.digest(ledger)
+            release.rollback(backup, process_check=process_check)
+            self.assertEqual(module.read_bytes(), b'old')
+            self.assertEqual(release.digest(ledger), current)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows CopyFile2 path limit')
+    def test_installs_and_restores_files_with_long_backup_paths(self):
+        with tempfile.TemporaryDirectory(dir=release.extended_path(Path(tempfile.gettempdir()))) as directory:
+            root = Path(directory)
+            package, app, data, bridge, codex, manifest = self.desktop_fixture(root)
+            name = 'agent-host/' + 'dependency/' * 10 + 'module.js'
+            current = self.add_installed_member(package, app, manifest, 'app', name, b'new')
+            current.write_bytes(b'old')
+            backup_root = root / ('rollback-' + 'x' * 120)
+            backup = release.install(package, app, data, bridge, codex, backup_root,
+                                     process_check=lambda **_: None)
+            self.assertGreaterEqual(len(str(backup / 'app' / name)), 260)
+            self.assertEqual(current.read_bytes(), b'new')
+            release.rollback(backup, process_check=lambda **_: None)
+            self.assertEqual(current.read_bytes(), b'old')
+
+    def test_install_checks_the_external_manifest_pin_before_any_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, app, data, bridge, codex, manifest = self.desktop_fixture(root)
+            pin = release.digest(package / 'release.json')
+            incoming = package / 'app/BeefTV.exe'
+            incoming.write_bytes(b'replaced payload')
+            manifest['files'][0]['sha256'] = release.digest(incoming)
+            release.write_json(package / 'release.json', manifest)
+            with self.assertRaisesRegex(ValueError, 'manifest hash mismatch'):
+                release.install(package, app, data, bridge, codex, root / 'backups',
+                                manifest_pin=pin, process_check=lambda **_: None)
+            self.assertEqual((app / 'BeefTV.exe').read_bytes(), b'old-desktop')
+            self.assertFalse((root / 'backups').exists())
+
+    def test_corrupt_backup_cannot_partially_roll_back_an_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, app, data, bridge, codex, manifest = self.desktop_fixture(root)
+            second = self.add_installed_member(package, codex, manifest, 'codex', 'server.py', b'new')
+            second.write_bytes(b'old')
+            backup = release.install(package, app, data, bridge, codex, root / 'backups',
+                                     process_check=lambda **_: None)
+            (backup / 'codex/server.py').write_bytes(b'corrupt')
+            with self.assertRaisesRegex(ValueError, 'Backup integrity mismatch'):
+                release.rollback(backup, process_check=lambda **_: None)
+            self.assertEqual((app / 'BeefTV.exe').read_bytes(), b'new-desktop')
+            self.assertEqual(second.read_bytes(), b'new')
+
+    def test_previous_rollback_bundle_cannot_overwrite_a_later_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, app, data, bridge, codex, manifest = self.desktop_fixture(root)
+            backup = release.install(package, app, data, bridge, codex, root / 'backups',
+                                     process_check=lambda **_: None)
+            desktop = package / 'app/BeefTV.exe'
+            desktop.write_bytes(b'next-desktop')
+            manifest['files'][0]['sha256'] = release.digest(desktop)
+            release.write_json(package / 'release.json', manifest)
+            release.install(package, app, data, bridge, codex, root / 'backups',
+                            process_check=lambda **_: None)
+            with self.assertRaisesRegex(ValueError, 'installed release does not match'):
+                release.rollback(backup, process_check=lambda **_: None)
+            self.assertEqual((app / 'BeefTV.exe').read_bytes(), b'next-desktop')
 
     def test_plugin_bundle_and_activation_use_formal_business_api(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -281,5 +437,58 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(json.loads(db.execute('select result from jobs').fetchone()[0])['taskId'],'new-paid-result')
             self.assertFalse(json.loads((backup/'rollback.json').read_text())['databaseRestored'])
             self.assertEqual(release.digest(data/'open_ai_canvas.db'),desktop_before)
+
+    def test_post_start_recovery_preserves_migrated_ledgers_and_new_tasks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, app, data, bridge, codex, manifest = self.desktop_fixture(root)
+            recovery = root / 'recovery'
+            (recovery / 'app').mkdir(parents=True)
+            (recovery / 'app/BeefTV.exe').write_bytes(b'compatible-recovery')
+            manifest.update(desktopSchemaVersion=30, ledgerSchemaVersion=6, codexCommit='codex', codexLedgerSchemaVersion=5)
+            for area, root_path in (('bridge', bridge), ('codex', codex)):
+                self.add_installed_member(package, root_path, manifest, area, 'server.py')
+            for plugin in ('dreamaPlugin', 'codexPlugin'):
+                name = plugin + '.beeftv-plugin'
+                target = self.add_installed_member(package, app, manifest, 'app', name)
+                manifest[plugin] = {'path': name, 'sha256': release.digest(target)}
+            release.write_json(package / 'release.json', manifest)
+            fallback = dict(manifest, files=[dict(manifest['files'][0], sha256=release.digest(recovery / 'app/BeefTV.exe'))])
+            release.write_json(recovery / 'release.json', fallback)
+            backup = release.install(package, app, data, bridge, codex, root / 'backups',
+                                     process_check=lambda **_: None, manifest_pin=release.digest(package / 'release.json'))
+            ledger_paths = [data / 'open_ai_canvas.db', bridge / 'state/jobs.sqlite3', codex / 'state/image-jobs.sqlite3']
+            with closing(sqlite3.connect(ledger_paths[0])) as db, db:
+                db.execute("insert into local_schema_migrations values(30,'bridge-media-delivery-ack','new')")
+                db.execute("insert into tasks values('new-task','succeeded')")
+            with closing(sqlite3.connect(ledger_paths[1])) as db, db:
+                db.execute('create table jobs(result text)')
+                db.execute("insert into jobs values(?)", (json.dumps({'status': 'submission_unknown'}),))
+                db.execute('pragma user_version=6')
+            (codex / 'state').mkdir()
+            with closing(sqlite3.connect(ledger_paths[2])) as db, db:
+                db.execute('create table jobs(status text)')
+                db.execute("insert into jobs values('succeeded')")
+                db.execute('pragma user_version=5')
+            before = [release.digest(path) for path in ledger_paths]
+            pin = release.digest(recovery / 'release.json')
+            with self.assertRaisesRegex(ValueError, 'manifest hash'):
+                release.rollback(backup, process_check=lambda **_: None, recovery_package=recovery, recovery_pin='0'*64)
+            with self.assertRaisesRegex(ValueError, 'complete recovery'):
+                release.rollback(backup, process_check=lambda **_: None, recovery_package=recovery, recovery_pin=pin)
+            for item in manifest['files'][1:]:
+                relative = Path(item['area']) / item['path']
+                target = recovery / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((package / relative).read_bytes())
+            fallback['files'].extend(manifest['files'][1:])
+            release.write_json(recovery / 'release.json', fallback)
+            pin = release.digest(recovery / 'release.json')
+            self.assertEqual((app / 'BeefTV.exe').read_bytes(), b'new-desktop')
+            release.rollback(backup, process_check=lambda **_: None, recovery_package=recovery, recovery_pin=pin)
+            self.assertEqual((app / 'BeefTV.exe').read_bytes(), b'compatible-recovery')
+            self.assertEqual([release.digest(path) for path in ledger_paths], before)
+            self.assertFalse(json.loads((backup / 'rollback.json').read_text())['databaseRestored'])
+
 
 if __name__=='__main__':unittest.main()

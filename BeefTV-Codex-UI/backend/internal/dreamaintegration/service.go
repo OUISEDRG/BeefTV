@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -103,8 +102,6 @@ func (s *Service) resolve(id string) (channel, *url.URL, error) {
 	return *selected, endpoint, nil
 }
 
-var safeTaskID = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,150}$`)
-
 func validRoute(method, path string, query map[string]string) bool {
 	allowed := map[string]bool{}
 	if method == http.MethodGet {
@@ -119,15 +116,16 @@ func validRoute(method, path string, query map[string]string) bool {
 			}
 		case "tasks":
 			allowed["canvasId"] = true
+			allowed["scope"] = true
+			if scope, exists := query["scope"]; exists && (scope != "exceptions" || query["canvasId"] == "") {
+				return false
+			}
 		default:
 			return false
 		}
 	} else if method == http.MethodPost {
 		if path != "series" {
-			parts := strings.Split(path, "/")
-			if len(parts) != 3 || parts[0] != "tasks" || !safeTaskID.MatchString(parts[1]) || parts[2] != "cancel" {
-				return false
-			}
+			return false
 		}
 	} else {
 		return false

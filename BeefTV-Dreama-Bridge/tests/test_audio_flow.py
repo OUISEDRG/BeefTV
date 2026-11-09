@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import copy
 import json
 import io
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bridge import Bridge, BridgeError
+from tests.fixtures_budget import FundedBridge as Bridge
 import audio_flow as a
 
 URL = 'https://jzinnovation.jxbaobian.cn/resourceBucket/audio/result.mp3'
@@ -21,7 +23,7 @@ def job():
             'taskName': 'BeefTV_audio_31a5b287b5aa435198ccf632443fe068',
             'identity': {'userId': 17921}, 'references': [], 'emotionVector': [],
             'audioConfig': {'format': 'mp3', 'sample_rate': 48000, 'pitch_rate': 0,
-                            'speech_rate': 0, 'loudness_rate': 0}}
+                            'speech_rate': 0, 'loudness_rate': 0}, **intent_fields(120)}
 
 
 def task_row(j=None):

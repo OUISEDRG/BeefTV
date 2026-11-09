@@ -18,6 +18,12 @@ class BridgeError(Exception):
         self.status, self.code = status, code
 
 
+def require_submission_budget(authorize_submission):
+    if authorize_submission is None:
+        raise BridgeError('本机 Codex 预算未配置，无法提交新任务。', 409, 'budget_not_configured')
+    authorize_submission()
+
+
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
@@ -185,11 +191,13 @@ class Chain:
 
 
 class CompletionBridge:
-    def __init__(self, factory, models, timeout=600, ttl=900, max_sessions=8, reasoning=None):
+    def __init__(self, factory, models, timeout=600, ttl=900, max_sessions=8, reasoning=None, *,
+                 authorize_submission=None):
         self.factory, self.models = factory, list(models)
         self.timeout, self.ttl, self.max_sessions = timeout, ttl, max_sessions
         self.chains, self.calls, self.idempotency = [], {}, {}
         self.reasoning = reasoning
+        self.authorize_submission = authorize_submission
         self.lock = threading.RLock()
 
     def _stop(self, chain):
@@ -267,6 +275,7 @@ class CompletionBridge:
             actual_model=model
         if sum(not c.closed for c in self.chains) >= self.max_sessions:
             raise BridgeError('本机 Codex 正在处理较多任务，请稍后再试。',429,'busy')
+        require_submission_budget(self.authorize_submission)
         rpc = self.factory()
         chain = Chain(rpc, model, tools, copy.deepcopy([m for m in messages if m['role'] in {'system','developer','user'}]),effort=effort)
         self.chains.append(chain)

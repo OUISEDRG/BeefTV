@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 from urllib.parse import quote, unquote
 
 from bridge import Bridge, BridgeError, DreamaGateway
+from tests.fixtures_budget import FundedBridge as Bridge
 import model_catalog
 
 try:
@@ -320,7 +321,7 @@ class OfflineAudioGateway(DreamaGateway):
         self.board = None
         self.fail_save = False
 
-    def _invoke(self, *args):
+    def run(self, *args):
         action = args[:2]
         if action == ('auth', 'whoami'):
             return {'userId': 17, 'teamId': 18}
@@ -334,6 +335,15 @@ class OfflineAudioGateway(DreamaGateway):
             self.writes.append(('create-board', args))
             self.board = {'id': 93, 'projectId': 91, 'seriesId': 92, 'videoTaskId': 0,
                           'videoPrompt': '', 'name': args[args.index('--name') + 1]}
+            return {}
+        if action == ('storyboard', 'update'):
+            payload = {'id': args[args.index('--id')+1], 'seriesId': args[args.index('--series-id')+1],
+                       'videoPrompt': args[args.index('--video-prompt')+1], 'duration': args[args.index('--duration')+1],
+                       'produceType': args[args.index('--produce-type')+1]}
+            self.writes.append(('save-board', copy.deepcopy(payload)))
+            self.board.update(payload)
+            if self.fail_save:
+                raise TimeoutError('Saved remotely, response outcome unknown')
             return {}
         if action == ('storyboard', 'list'):
             return {'items': [copy.deepcopy(self.board)] if self.board else []}

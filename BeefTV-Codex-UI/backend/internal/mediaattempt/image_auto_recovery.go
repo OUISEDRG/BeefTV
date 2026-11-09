@@ -290,6 +290,9 @@ func (s *Service) FailedImageResult(ctx context.Context, task model.Task) ([]byt
 }
 
 func (s *Service) FailedImageResultWith(ctx context.Context, task model.Task, send func(*http.Request, func() error) ([]byte, string, error)) ([]byte, string, error) {
+	if result, outcome, handled, err := s.recoverBridgeImage(ctx, task); handled {
+		return result, outcome, err
+	}
 	all, err := s.repo.ImageRecoveryEvidence([]string{task.ID})
 	if err != nil {
 		return nil, "", err

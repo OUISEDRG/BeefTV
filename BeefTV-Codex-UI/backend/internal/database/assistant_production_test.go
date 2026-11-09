@@ -54,7 +54,8 @@ func TestProductionAuthorizationMigrationPreservesV19HistoryAndRequiresColumn(t 
 	}
 	var after []localSchemaMigration
 	db.Order("version").Find(&after)
-	if len(after) != len(before)+10 || after[len(before)].Name != "assistant-production-authorization" || after[len(before)+1].Name != "skill-market-release-metadata" || after[len(before)+5].Name != "reconcile-preview-assistant-schema" || after[len(before)+6].Name != "task-recovery-outcome" || after[len(before)+7].Name != "task-beefapi-settlement" || after[len(before)+8].Name != "managed-media-query-identity" || after[len(before)+9].Name != "local-admin-audit" {
+	if len(after) != len(before)+11 || after[len(before)].Name != "assistant-production-authorization" || after[len(before)+1].Name != "skill-market-release-metadata" || after[len(before)+5].Name != "reconcile-preview-assistant-schema" || after[len(before)+6].Name != "task-recovery-outcome" || after[len(before)+7].Name != "task-beefapi-settlement" || after[len(before)+8].Name != "managed-media-query-identity" || after[len(before)+9].Name != "local-admin-audit" ||
+		after[len(before)+10].Version != 30 || after[len(before)+10].Name != "bridge-media-delivery-ack" {
 		t.Fatal("migration identity changed")
 	}
 	for i, row := range before {

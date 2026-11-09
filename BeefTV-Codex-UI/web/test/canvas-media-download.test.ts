@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildImageGenerationNodeTitle } from "@/lib/canvas/canvas-generation-title";
-import { buildCanvasMediaDownloadFileName, canvasMediaFileExtension, mediaFileExtension, sanitizeDownloadFileName } from "@/lib/canvas/canvas-media-download";
+import { buildBatchDownloadFilename, buildCanvasMediaDownloadFileName, canvasMediaFileExtension, collectDownloadableMediaNodes, mediaFileExtension, sanitizeDownloadFileName } from "@/lib/canvas/canvas-media-download";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 function mediaNode(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
@@ -18,6 +18,27 @@ function mediaNode(overrides: Partial<CanvasNodeData> = {}): CanvasNodeData {
 }
 
 describe("canvas media download", () => {
+    test("框选下载过滤非媒体和空节点，并按从上到下、每行从左到右排列", () => {
+        const image = mediaNode({ id: "image", position: { x: 500, y: 100 } });
+        const video = mediaNode({ id: "video", type: CanvasNodeType.Video, position: { x: 200, y: 140 }, metadata: { storageKey: "resource:owned-video" } });
+        const audio = mediaNode({ id: "audio", type: CanvasNodeType.Audio, position: { x: 10, y: 180 }, metadata: { content: "https://example.com/voice.wav" } });
+        const text = mediaNode({ id: "text", type: CanvasNodeType.Text });
+        const empty = mediaNode({ id: "empty", metadata: { content: "   " } });
+        const unselected = mediaNode({ id: "unselected" });
+        const selection = new Set(["audio", "image", "text", "empty", "video"]);
+        for (const nodes of [[audio, text, image, unselected, empty, video], [image, video, empty, audio, unselected, text]]) {
+            expect(collectDownloadableMediaNodes(nodes, selection).map((node) => node.id)).toEqual(["video", "image", "audio"]);
+        }
+    });
+
+    test("批量下载文件名按批次宽度补零并使用素材真实格式", () => {
+        const video = mediaNode({ type: CanvasNodeType.Video, title: "镜头1:开场/雨夜?", metadata: { content: "https://example.com/shot.mov", mimeType: "video/quicktime" } });
+        const audio = mediaNode({ type: CanvasNodeType.Audio, title: "角色对白.wav", metadata: { storageKey: "resource:owned-audio", mimeType: "audio/x-wav" } });
+        expect(buildBatchDownloadFilename(video, 0, 8)).toBe("01_镜头1_开场_雨夜.mov");
+        expect(buildBatchDownloadFilename(audio, 2, 120)).toBe("003_角色对白.wav");
+        expect(buildBatchDownloadFilename(mediaNode({ title: "  " }), 1, 8)).toBe("02_图片.png");
+    });
+
     test("素材库 MIME 别名经过文件名清理后仍保留真实格式后缀", () => {
         for (const [mime, extension] of [["video/quicktime", "mov"], ["image/svg+xml", "svg"], ["audio/x-wav", "wav"], ["audio/mpeg", "mp3"], ["audio/mp4", "m4a"], ["image/jpeg; charset=utf-8", "jpg"]]) {
             const name = sanitizeDownloadFileName(`中文素材.${mediaFileExtension(mime)}`);

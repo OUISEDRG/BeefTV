@@ -72,7 +72,9 @@ export type PluginProviderContribution = {
     create: PluginProviderOperation;
     poll?: PluginProviderOperation;
     cancel?: PluginProviderOperation;
+    ack?: PluginProviderOperation;
     response: {
+        artifacts?: unknown;
         taskIdPaths?: string[];
         statusPaths?: string[];
         messagePaths?: string[];

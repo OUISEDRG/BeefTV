@@ -1,6 +1,8 @@
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
+import { hasCanvasMediaSource } from "@/lib/canvas/canvas-media-source";
 
 const FILE_NAME_PART_LIMIT = 80;
+const DOWNLOAD_ROW_HEIGHT = 48;
 
 const MIME_EXTENSIONS: Record<string, string> = {
     "image/png": "png",
@@ -34,6 +36,37 @@ const MIME_EXTENSIONS: Record<string, string> = {
 };
 
 const CONTENT_EXTENSIONS = new Set(Object.values(MIME_EXTENSIONS).concat(["jpeg", "mpg"]));
+
+export function collectDownloadableMediaNodes(nodes: CanvasNodeData[], selectedIds: ReadonlySet<string>) {
+    const selected = nodes.filter((node) => selectedIds.has(node.id)
+        && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio)
+        && hasCanvasMediaSource(node));
+    selected.sort((a, b) => a.position.y - b.position.y);
+
+    const ordered: CanvasNodeData[] = [];
+    for (let start = 0; start < selected.length;) {
+        const rowTop = selected[start].position.y;
+        let end = start + 1;
+        while (end < selected.length && selected[end].position.y - rowTop <= DOWNLOAD_ROW_HEIGHT) end += 1;
+        const row = selected.slice(start, end);
+        row.sort((a, b) => a.position.x - b.position.x || a.id.localeCompare(b.id));
+        ordered.push(...row);
+        start = end;
+    }
+    return ordered;
+}
+
+export function buildBatchDownloadFilename(node: CanvasNodeData, index: number, total: number) {
+    const prefix = String(index + 1).padStart(Math.max(2, String(total).length), "0");
+    const extension = canvasMediaFileExtension(node);
+    const title = node.title.trim().replace(/[\u007f-\u009f]/g, "_");
+    const titleExtension = title.match(/\.([a-z0-9]+)$/i)?.[1];
+    const name = titleExtension && mediaFileExtension(undefined, title) === extension
+        ? title.slice(0, -titleExtension.length - 1)
+        : title;
+    const fallback = node.type === CanvasNodeType.Video ? "视频" : node.type === CanvasNodeType.Audio ? "音频" : "图片";
+    return `${prefix}_${safeFileNamePart(name, fallback)}.${extension}`;
+}
 
 export function buildCanvasMediaDownloadFileName(canvasTitle: string, node: CanvasNodeData, now = new Date()) {
     const canvasName = safeFileNamePart(canvasTitle, "未命名画布");

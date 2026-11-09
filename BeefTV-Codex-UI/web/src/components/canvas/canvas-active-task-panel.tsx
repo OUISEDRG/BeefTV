@@ -211,7 +211,7 @@ function ActiveTaskCard({
                                 {generationTaskStageLabel(task)}
                             </span>
                         </div>
-                        {onCancelTask && (task.status === "queued" || task.status === "running") ? (
+                        {onCancelTask && !task.generationCancelUnsupported && (task.status === "queued" || task.status === "running") ? (
                             <button
                                 type="button"
                                 className="mt-3 inline-flex h-7 items-center gap-1 rounded-[var(--r-sm)] px-2 text-[var(--fs-tiny)] font-medium transition-colors"

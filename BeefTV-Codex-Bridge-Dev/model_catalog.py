@@ -167,8 +167,8 @@ def probe_native_catalog(executable: str, cwd: str, *, cache_path: str | Path | 
     working_dir = Path(cwd).resolve()
     working_dir.mkdir(parents=True, exist_ok=True)
     target = Path(cache_path) if cache_path is not None else working_dir / "native-model-catalog.json"
-    env = {key: value for key, value in os.environ.items()
-           if not key.upper().startswith("CODEX_") or key.upper() == "CODEX_HOME"}
+    from codex_rpc import clean_environment
+    env = clean_environment()
     factory = popen_factory or subprocess.Popen
     process = factory([executable, "app-server", "--listen", "stdio://"],
                       cwd=str(working_dir), env=env, stdin=subprocess.PIPE,

@@ -317,7 +317,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             data-result-origin={canvasMediaNodeOrigin(data) || undefined}
             data-task-status={data.metadata?.taskStatus || undefined}
             data-task-id={data.metadata?.taskId || undefined}
-            data-task-cancellable={data.metadata?.status === "loading" && (data.metadata?.taskStatus === "queued" || data.metadata?.taskStatus === "running") ? "true" : "false"}
+            data-task-cancellable={data.metadata?.status === "loading" && !data.metadata?.taskGenerationCancelUnsupported && (data.metadata?.taskStatus === "queued" || data.metadata?.taskStatus === "running") ? "true" : "false"}
             data-task-stage={data.metadata?.taskStage || undefined}
             data-task-progress={typeof data.metadata?.taskProgress === "number" ? String(data.metadata.taskProgress) : undefined}
             data-subtitle-count={data.metadata?.subtitleEntries?.length ? String(data.metadata.subtitleEntries.length) : undefined}

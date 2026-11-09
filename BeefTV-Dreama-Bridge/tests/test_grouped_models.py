@@ -1,8 +1,10 @@
+from tests.fixtures_budget import intent_fields
 import tempfile
 import unittest
 import copy
 from unittest.mock import patch
 from bridge import Bridge,BridgeError,DreamaGateway,validate_request
+from tests.fixtures_budget import FundedBridge as Bridge
 from install_channel import channel
 from install_extension import channel as extension_channel
 from tests.test_bridge import FakeGateway
@@ -35,7 +37,7 @@ class GroupedModelsTests(unittest.TestCase):
                         job=Bridge(root,gateway).prepare(data,'grouped')
                     self.assertEqual(job['model'],eid);self.assertEqual(job['resolution'],resolution.upper())
                     self.assertEqual(job['prompt'],data['prompt']);quote.assert_called_once_with(5,eid)
-                    job.update(status='submitting',approvedAt=1)
+                    job.update(status='submitting',approvedAt=1, **intent_fields(job.get('pointsEstimate',1)))
                     with patch.object(DreamaGateway,'_invoke',return_value={'taskId':123}) as paid:
                         DreamaGateway().submit_video(job)
                     args=paid.call_args.args

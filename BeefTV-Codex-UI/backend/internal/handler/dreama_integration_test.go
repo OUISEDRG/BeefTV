@@ -23,7 +23,7 @@ func TestDreamaFacadeBusinessDiscoveryIsAllowlisted(t *testing.T) {
 		{Method: "POST", Path: "/api/integrations/dreama/v1/submit"},
 		{Method: "GET", Path: "/api/integrations/other/secrets"},
 	})
-	if len(catalog.Tools) != 4 {
+	if len(catalog.Tools) != 3 {
 		t.Fatalf("wrong discovery: %#v", catalog.Tools)
 	}
 	for _, tool := range catalog.Tools {

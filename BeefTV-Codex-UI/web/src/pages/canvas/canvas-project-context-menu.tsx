@@ -1,5 +1,11 @@
+import { App } from "antd";
+import { useState } from "react";
+
 import { CanvasNodeContextMenu } from "@/components/canvas/canvas-context-menu";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
+import { collectDownloadableMediaNodes } from "@/lib/canvas/canvas-media-download";
+import { batchDownloadCanvasMediaNodes } from "@/services/canvas-media-batch-download";
+import { isWailsNativeShell } from "@/services/desktop-media-save";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
@@ -7,6 +13,8 @@ type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["
 type CanvasProjectContextMenuProps = {
     menu: ContextMenuState | null;
     node: CanvasNodeData | null;
+    nodes: CanvasNodeData[];
+    selectedNodeIds: ReadonlySet<string>;
     workspaceMode: CanvasWorkspaceMode;
     isProjectLinked: boolean;
     canUndo: boolean;
@@ -46,8 +54,29 @@ type CanvasProjectContextMenuProps = {
     onDeleteSelection: () => void;
 };
 
-export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props }: CanvasProjectContextMenuProps) {
+export function CanvasProjectContextMenu({ menu, node, nodes, selectedNodeIds, screenToCanvas, ...props }: CanvasProjectContextMenuProps) {
+    const { message } = App.useApp();
+    const [batchDownloading, setBatchDownloading] = useState(false);
     if (!menu) return null;
+    const downloadableNodes = props.selectedCount > 1 && menu.type !== "connection"
+        ? collectDownloadableMediaNodes(nodes, selectedNodeIds)
+        : [];
+    const handleBatchDownload = async () => {
+        if (batchDownloading || downloadableNodes.length === 0) return;
+        setBatchDownloading(true);
+        try {
+            const { cancelled, downloaded, failed } = await batchDownloadCanvasMediaNodes(downloadableNodes);
+            if (cancelled) return;
+            const completed = isWailsNativeShell() ? `已保存 ${downloaded} 个素材` : `已发起 ${downloaded} 个素材下载`;
+            if (failed === 0) message.success(completed);
+            else if (downloaded > 0) message.warning(`${completed}，${failed} 个下载失败`);
+            else message.warning(`${failed} 个素材下载失败`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "批量下载未能完成");
+        } finally {
+            setBatchDownloading(false);
+        }
+    };
     const menuPosition = () => menu.type === "canvas" ? menu.position : screenToCanvas(menu.x, menu.y);
     return (
         <CanvasNodeContextMenu
@@ -59,6 +88,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             canRedo={props.canRedo}
             canPaste={props.canPaste}
             selectedCount={props.selectedCount}
+            downloadableSelectionCount={downloadableNodes.length}
             onClose={props.onClose}
             onAddNode={(type) => {
                 if (menu.type === "canvas") props.onAddNode(type, menu.position);
@@ -115,6 +145,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
                 if (node && isFrameNode(node)) props.onToggleFrame(node);
             }}
             onSpreadSelection={props.onSpreadSelection}
+            onBatchDownloadSelection={batchDownloading ? undefined : () => void handleBatchDownload()}
             onCopySelection={props.onCopySelection}
             onDeleteSelection={props.onDeleteSelection}
         />

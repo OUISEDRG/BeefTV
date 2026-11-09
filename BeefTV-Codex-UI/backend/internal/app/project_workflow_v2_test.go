@@ -66,8 +66,17 @@ func TestRegisterTaskOutputFromTaskPersistsMediaAssetAndArtifactIdempotently(t *
 	if err := db.Create(&task).Error; err != nil {
 		t.Fatal(err)
 	}
+	if bound, err := service.repo.HasRegisteredWorkflowOutput(task, videoStep.ID, resource.ID); err != nil || bound {
+		t.Fatalf("unregistered workflow output: bound=%v, error=%v", bound, err)
+	}
 	if err := service.RegisterTaskOutputFromTask(task); err != nil {
 		t.Fatal(err)
+	}
+	if bound, err := service.repo.HasRegisteredWorkflowOutput(task, videoStep.ID, resource.ID); err != nil || !bound {
+		t.Fatalf("registered workflow output: bound=%v, error=%v", bound, err)
+	}
+	if bound, err := service.repo.HasRegisteredWorkflowOutput(task, videoStep.ID, "different-resource"); err != nil || bound {
+		t.Fatalf("different workflow output: bound=%v, error=%v", bound, err)
 	}
 	if err := service.RegisterTaskOutputFromTask(task); err != nil {
 		t.Fatal(err)

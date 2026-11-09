@@ -1,10 +1,15 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dreama 生成任务</title>
-<style>body{font:16px system-ui;background:#111827;color:#e5e7eb;max-width:1000px;margin:40px auto;padding:20px}h1{color:#fff}p{line-height:1.6}.job{border:1px solid #374151;border-radius:14px;padding:24px;margin:20px 0;background:#1f2937}.meta{color:#a5b4fc}button{background:#4f46e5;color:white;border:0;padding:12px 18px;border-radius:8px;cursor:pointer;margin-right:12px}button:disabled{opacity:.5;cursor:wait}pre{white-space:pre-wrap;max-height:200px;overflow:auto;font:inherit}input{padding:12px;width:65%}video{max-width:100%;max-height:480px}#message{color:#fbbf24}a{color:#a5b4fc}</style>
-<h1>Dreama 生成任务</h1><p id="execution-policy">正在读取执行设置……</p><p>任务提交前可点击“取消此任务”，也可点击“立即执行”。本机转接服务需保持运行。</p>
-<p>在 BeefTV 选择模型、填写提示词并点击生成。视频、图片和音频按节点类型选择对应的剧梦渠道。这里显示任务与预计积分，完成的素材会自动回传 BeefTV。</p>
-<p>视频增强：在普通视频节点选择“剧梦视频增强”，连接一个原视频，再点击生成。按原视频真实时长预估积分；A、B、C 闲时预计 1 积分/秒，C 优先预计 2 积分/秒。视频延长：把原视频连接到新的视频节点，选择“剧梦视频延长”，填写续写提示词，右侧秒数为新增时长；只回传续写片段，原视频保留在原节点。</p>
-<p>图片：21个云端模型，分辨率和比例在节点设置中选择。另5个即梦模型需要独立本机助手，目前未连接。音频：Seed Audio 1.0、参考音频配音，以及79项标明名称的音色预设。Seed Audio预计预扣120积分，最终按剧梦结算。</p>
-<p>文本：已核对7个模型，并记录画布项目233227；当前CLI凭据不能认证画布文本接口，文本渠道尚未启用。</p>
-<p>生成、增强、延长均适用 5 秒自动执行。报价变化会显示新积分并重新倒计时 5 秒。失败或“回执待核对”的任务不会自动重提，历史待确认任务也不会自动补交。最终费用以剧梦结算为准；目录中的 0 积分不保证外部平台免费。</p>
-<div id="login"><input id="key" type="password" placeholder="本地访问密钥（可用“打开Dreama任务”启动脚本自动登录）"><button id="signin">进入</button></div>
-<p id="message"></p><div id="jobs"></div><script src="/console.js"></script></html>
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dreama 本机诊断</title>
+<style>body{font:16px system-ui;background:#111827;color:#e5e7eb;max-width:760px;margin:40px auto;padding:20px}h1{color:#fff}p{line-height:1.6}.job{border:1px solid #374151;border-radius:12px;padding:16px;margin:16px 0;background:#1f2937}button{background:#4f46e5;color:white;border:0;padding:10px 14px;border-radius:6px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}input{padding:10px;width:65%}#message{color:#fbbf24}</style>
+<h1>Dreama 本机诊断</h1>
+<p id="execution-policy">正在读取预算状态……</p>
+<p>生成进度、结果与素材交付在 BeefTV 原生任务中心查看。这里显示预算、预检和对账异常。</p>
+<div id="login"><input id="key" type="password" aria-label="本地访问密钥" placeholder="本地访问密钥"><button id="signin" type="button">进入</button></div>
+<button id="refresh" type="button">刷新异常</button>
+<p id="message" role="alert"></p>
+<div id="jobs"></div>
+<script src="/console.js"></script>
+</html>

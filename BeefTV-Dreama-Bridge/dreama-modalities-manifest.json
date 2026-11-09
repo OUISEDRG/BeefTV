@@ -1,8 +1,8 @@
 {
-  "apiVersion": "beeftv.plugin/v2",
+  "apiVersion": "beeftv.plugin/v3",
   "id": "dreama-modalities",
   "name": "剧梦媒体任务",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "Local Dreama Bridge",
   "description": "连接本机剧梦桥接服务，提供可恢复的视频、延长、图片和音频任务，支持人物图片音色绑定。只提交用户主动创建的任务。",
   "permissions": [
@@ -59,6 +59,9 @@
           "headers": {
             "Idempotency-Key": {
               "$ref": "request.extra.idempotencyKey"
+            },
+            "X-BeefTV-Task-ID": {
+              "$ref": "request.extra.beefTaskId"
             }
           },
           "body": {
@@ -132,7 +135,15 @@
           "method": "GET",
           "path": "/v1/videos/{{taskId}}"
         },
+        "ack": {
+          "method": "POST",
+          "path": "/v1/jobs/{{taskId}}/ack",
+          "originPath": true,
+          "headers": {"Idempotency-Key": {"$ref": "request.extra.mediaAckKey"}},
+          "body": {"$ref": "request.extra.mediaAck"}
+        },
         "response": {
+          "artifacts": {"$ref": "response.artifacts"},
           "taskId": {
             "$ref": "response.id"
           },
@@ -201,6 +212,9 @@
           "headers": {
             "Idempotency-Key": {
               "$ref": "request.extra.idempotencyKey"
+            },
+            "X-BeefTV-Task-ID": {
+              "$ref": "request.extra.beefTaskId"
             }
           },
           "body": {
@@ -271,7 +285,15 @@
           "method": "GET",
           "path": "/v1/videos/{{taskId}}"
         },
+        "ack": {
+          "method": "POST",
+          "path": "/v1/jobs/{{taskId}}/ack",
+          "originPath": true,
+          "headers": {"Idempotency-Key": {"$ref": "request.extra.mediaAckKey"}},
+          "body": {"$ref": "request.extra.mediaAck"}
+        },
         "response": {
+          "artifacts": {"$ref": "response.artifacts"},
           "taskId": {
             "$ref": "response.id"
           },
@@ -340,6 +362,9 @@
           "headers": {
             "Idempotency-Key": {
               "$ref": "request.extra.idempotencyKey"
+            },
+            "X-BeefTV-Task-ID": {
+              "$ref": "request.extra.beefTaskId"
             }
           },
           "body": {
@@ -387,16 +412,17 @@
           "method": "GET",
           "path": "/v1/images/{{taskId}}"
         },
+        "ack": {
+          "method": "POST",
+          "path": "/v1/jobs/{{taskId}}/ack",
+          "originPath": true,
+          "headers": {"Idempotency-Key": {"$ref": "request.extra.mediaAckKey"}},
+          "body": {"$ref": "request.extra.mediaAck"}
+        },
         "response": {
+          "artifacts": {"$ref": "response.artifacts"},
           "taskId": {
-            "$coalesce": [
-              {
-                "$ref": "response.id"
-              },
-              {
-                "$ref": "taskId"
-              }
-            ]
+            "$ref": "response.id"
           },
           "status": {
             "$coalesce": [
@@ -556,6 +582,9 @@
           "headers": {
             "Idempotency-Key": {
               "$ref": "request.extra.idempotencyKey"
+            },
+            "X-BeefTV-Task-ID": {
+              "$ref": "request.extra.beefTaskId"
             }
           },
           "body": {
@@ -662,16 +691,17 @@
           "method": "GET",
           "path": "/v1/audio/tasks/{{taskId}}"
         },
+        "ack": {
+          "method": "POST",
+          "path": "/v1/jobs/{{taskId}}/ack",
+          "originPath": true,
+          "headers": {"Idempotency-Key": {"$ref": "request.extra.mediaAckKey"}},
+          "body": {"$ref": "request.extra.mediaAck"}
+        },
         "response": {
+          "artifacts": {"$ref": "response.artifacts"},
           "taskId": {
-            "$coalesce": [
-              {
-                "$ref": "response.id"
-              },
-              {
-                "$ref": "taskId"
-              }
-            ]
+            "$ref": "response.id"
           },
           "status": {
             "$coalesce": [
@@ -745,6 +775,9 @@
           "headers": {
             "Idempotency-Key": {
               "$ref": "request.extra.idempotencyKey"
+            },
+            "X-BeefTV-Task-ID": {
+              "$ref": "request.extra.beefTaskId"
             }
           },
           "body": {
@@ -813,7 +846,15 @@
           "method": "GET",
           "path": "/v1/videos/{{taskId}}"
         },
+        "ack": {
+          "method": "POST",
+          "path": "/v1/jobs/{{taskId}}/ack",
+          "originPath": true,
+          "headers": {"Idempotency-Key": {"$ref": "request.extra.mediaAckKey"}},
+          "body": {"$ref": "request.extra.mediaAck"}
+        },
         "response": {
+          "artifacts": {"$ref": "response.artifacts"},
           "taskId": {
             "$ref": "response.id"
           },

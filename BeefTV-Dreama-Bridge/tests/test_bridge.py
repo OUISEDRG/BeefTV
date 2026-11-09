@@ -7,6 +7,7 @@ from PIL import Image
 
 try:
     from bridge import BridgeError, validate_request, decode_image, Bridge, DreamaGateway
+    from tests.fixtures_budget import FundedBridge as Bridge
 except ImportError:
     BridgeError = validate_request = decode_image = Bridge = DreamaGateway = None
 
@@ -105,7 +106,7 @@ class BridgeTests(unittest.TestCase):
             for path in ('/storyboard/api/updateProjectLibrary', '/storyboard/api/save'):
                 response = Mock(status_code=200)
                 response.json.return_value = {'code': 0, 'msg': 'success', 'result': None, 'traceId': 'unit-only'}
-                with patch('bridge.requests.post', return_value=response):
+                with patch('dreama_compat.http.requests.post', return_value=response):
                     self.assertEqual(gateway.post(path, {'id': 123}), {})
 
     def test_object_receipts_remain_available_and_malformed_receipts_are_explicit(self):
@@ -118,10 +119,10 @@ class BridgeTests(unittest.TestCase):
             for result, expected in [({'bucketName': 'test'}, {'bucketName': 'test'}),
                                      ({'item': {'id': 12}}, {'id': 12}), ({'item': None}, {})]:
                 response = Mock(status_code=200); response.json.return_value = {'code': 0, 'result': result}
-                with patch('bridge.requests.post', return_value=response):
+                with patch('dreama_compat.http.requests.post', return_value=response):
                     self.assertEqual(gateway.post('/user/resource/getOssToken', {}), expected)
             response.json.return_value = {'code': 0, 'result': ['unexpected']}
-            with patch('bridge.requests.post', return_value=response), self.assertRaises(BridgeError):
+            with patch('dreama_compat.http.requests.post', return_value=response), self.assertRaises(BridgeError):
                 gateway.post('/user/resource/getOssToken', {})
     def test_prompt_never_adds_reference_description_to_original(self):
         self.assertTrue(hasattr(DreamaGateway, 'prompt_with_references'))
@@ -153,8 +154,8 @@ class BridgeTests(unittest.TestCase):
         from unittest.mock import patch, Mock
         gateway=DreamaGateway()
         with patch.object(gateway,'post',return_value={'bucketName':'resourceBucket','token':'not-real'}), \
-             patch('bridge.requests.get',return_value=Mock(status_code=200,content=png())), \
-             patch('bridge.requests.post') as upload:
+             patch('dreama_compat.assets.requests.get',return_value=Mock(status_code=200,content=png())), \
+             patch('dreama_compat.http.requests.post') as upload:
             self.assertTrue(gateway.upload_image(png(),'test').endswith('.png'))
             upload.assert_not_called()
 

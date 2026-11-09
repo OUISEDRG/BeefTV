@@ -95,6 +95,9 @@ func (s *Service) recoverCanvasTaskBindings(task model.Task) error {
 	if projectID := strings.TrimSpace(task.ProjectID); projectID != "" {
 		s.reconcileCharacterTurnaroundTasks(task.UserID, projectID)
 	}
+	if last == nil {
+		last = s.mediaAcks().Queue(task)
+	}
 	return last
 }
 

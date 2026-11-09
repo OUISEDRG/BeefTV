@@ -23,7 +23,8 @@ class ModelSettingsReviewTests(unittest.TestCase):
             rpc = RecordingRPC([tool()])
             self.rpcs.append(rpc)
             return rpc
-        self.bridge = CompletionBridge(factory, self.catalog.model_ids, reasoning=self.settings)
+        self.bridge = CompletionBridge(factory, self.catalog.model_ids, reasoning=self.settings,
+                                       authorize_submission=lambda: None)
         self.addCleanup(self.bridge.close)
         self.request = {'model':'gpt-6-astra','messages':[{'role':'user','content':'read canvas'}],
                         'tools':TOOLS,'reasoning_effort':'medium'}

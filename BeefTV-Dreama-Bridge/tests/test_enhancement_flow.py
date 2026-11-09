@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from bridge import Bridge, BridgeError
+from tests.fixtures_budget import FundedBridge as Bridge
 from tests.test_enhancement import source_request, TASK, SOURCE
 from enhancement import EnhancementGateway, probe_video, MEDIA_TOOLS
 

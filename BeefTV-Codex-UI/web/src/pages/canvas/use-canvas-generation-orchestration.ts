@@ -217,6 +217,7 @@ export function useCanvasGenerationOrchestration({
     const cancelCanvasTask = useCallback(
         (task: GenerationTask) => {
             const deliveryOnly = task.status === "succeeded";
+            if (task.generationCancelUnsupported && !deliveryOnly) return;
             const owner = lifetime.capture(projectId);
             const isCurrent = () => lifetime.matches(owner, projectIdRef.current);
             modal.confirm({

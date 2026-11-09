@@ -270,7 +270,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	if log.StartedAt.IsZero() {
 		log.StartedAt = log.CreatedAt.Add(-time.Duration(log.DurationMs) * time.Millisecond)
 	}
-	if log.TaskID != "" {
+	if log.TaskID != "" && log.RequestKind != "media-ack" {
 		stage := log.RequestKind
 		var nextPollAt *time.Time
 		if stage == "create" && log.Status == model.ApiCallStatusSucceeded && log.ProviderRequestID != "" {

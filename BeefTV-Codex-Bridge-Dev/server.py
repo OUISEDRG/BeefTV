@@ -42,20 +42,42 @@ def create_server(bridge, token, port=18766, status=None, settings=None, image_j
             if image_jobs is None:
                 return self.error(BridgeError('Codex 内置生图尚未启用。',404,'image_generation_unavailable'))
             try:
-                if action=='create':
+                if action in ('create','ack'):
+                    if action=='ack' and (self.headers.get('Transfer-Encoding') or
+                            self.headers.get('Content-Type','').split(';')[0].strip()!='application/json'):
+                        raise ValueError('Invalid ACK content type')
                     length=int(self.headers.get('Content-Length','0'))
-                    if not 0<length<=MAX_BODY: raise BridgeError('生图请求大小无效。',413,'invalid_image_request')
+                    limit=4096 if action=='ack' else MAX_BODY
+                    if not 0<length<=limit:
+                        if action=='ack': raise ValueError('Invalid ACK size')
+                        raise BridgeError('生图请求大小无效。',413,'invalid_image_request')
                     raw=self.rfile.read(length)
-                    if len(raw)!=length: raise BridgeError('生图请求内容不完整。')
+                    if len(raw)!=length:
+                        if action=='ack': raise ValueError('Incomplete ACK')
+                        raise BridgeError('生图请求内容不完整。')
                     payload=json.loads(raw)
-                    if not isinstance(payload,dict): raise BridgeError('生图请求必须为 JSON 对象。')
-                    result=image_jobs.create(payload,self.headers.get('Idempotency-Key'))
+                    if not isinstance(payload,dict):
+                        if action=='ack': raise ValueError('Expected an ACK object')
+                        raise BridgeError('生图请求必须为 JSON 对象。')
+                    key=self.headers.get('Idempotency-Key')
+                    if action=='ack': return self.json(200,image_jobs.acknowledge(job_id,payload,key))
+                    task_id=self.headers.get('X-BeefTV-Task-ID')
+                    if task_id is not None:
+                        if payload.get('beefTaskId',task_id)!=task_id:
+                            raise BridgeError('BeefTV 任务标识不一致。',409,'image_task_identity_conflict')
+                        payload['beefTaskId']=task_id
+                    result=image_jobs.create(payload,key)
                     return self.json(202,result)
                 if action=='get': return self.json(200,image_jobs.get(job_id))
+                if action=='receipts': return self.json(200,image_jobs.delivery_receipts(job_id))
                 if action=='cancel': return self.json(200,image_jobs.cancel(job_id))
             except BridgeError as error: return self.error(error)
-            except (ValueError,TypeError): return self.error(BridgeError('无效的生图请求。',400,'invalid_image_request'))
-            except Exception: return self.error(BridgeError('本机生图任务处理失败，请检查桥接服务。',500,'image_job_error'))
+            except (ValueError,TypeError):
+                if action=='ack': return self.error(BridgeError('媒体交付 ACK 或幂等键无效。',400,'invalid_media_ack'))
+                return self.error(BridgeError('无效的生图请求。',400,'invalid_image_request'))
+            except Exception:
+                if action=='ack': return self.error(BridgeError('暂时无法保存媒体交付 ACK。',500,'media_ack_unavailable'))
+                return self.error(BridgeError('本机生图任务处理失败，请检查桥接服务。',500,'image_job_error'))
         def allowed(self,auth=True):
             host=self.headers.get('Host','').split(':')[0].lower()
             if host not in ('127.0.0.1','localhost'):
@@ -118,8 +140,8 @@ def create_server(bridge, token, port=18766, status=None, settings=None, image_j
                 if self.settings_allowed(): self.json(200,settings.snapshot())
                 return
             if not self.allowed(auth=path!='/health'): return
-            image_match=re.fullmatch(r'/v1/images/jobs/([A-Za-z0-9_-]{1,80})',path)
-            if image_match: return self.image_request('get',image_match.group(1))
+            image_match=re.fullmatch(r'/v1/images/jobs/([A-Za-z0-9_-]{1,80})(/ack)?',path)
+            if image_match: return self.image_request('receipts' if image_match.group(2) else 'get',image_match.group(1))
             if path in ('/v1/reasoning-settings','/reasoning-settings'):
                 if settings is None: return self.error(BridgeError('模型推理设置未启用。',404,'reasoning_unavailable'))
                 return self.json(200,settings.snapshot())
@@ -162,7 +184,10 @@ def create_server(bridge, token, port=18766, status=None, settings=None, image_j
                 if not self.settings_allowed(write=True): return
                 return self.update_reasoning()
             if not self.allowed(): return
-            if urlsplit(self.path).path=='/v1/images/jobs': return self.image_request('create')
+            path=urlsplit(self.path).path
+            if path=='/v1/images/jobs': return self.image_request('create')
+            ack_match=re.fullmatch(r'/v1/images/jobs/([A-Za-z0-9_-]{1,80})/ack',path)
+            if ack_match: return self.image_request('ack',ack_match.group(1))
             if urlsplit(self.path).path == '/shutdown':
                 self.json(200,{'stopping':True})
                 threading.Thread(target=self.server.shutdown,daemon=True).start()
@@ -230,19 +255,16 @@ def main():
     args=parser.parse_args()
     root=args.root.resolve(); state=root/'state'; state.mkdir(parents=True,exist_ok=True)
     work=root/'runtime'; work.mkdir(parents=True,exist_ok=True)
-    config=json.loads((root/'runtime-config.json').read_text('utf-8'))
-    if config.get('codexHome'):
-        codex_home=Path(config['codexHome']).resolve(strict=True)
-        temporary=codex_home/'.tmp'; temporary.mkdir(exist_ok=True)
-        os.environ.update(CODEX_HOME=str(codex_home),TEMP=str(temporary),TMP=str(temporary))
+    from runtime_config import configure_runtime
+    executable=str(configure_runtime(root,work).executable)
     from codex_rpc import RpcSession
     from model_catalog import ModelCatalog, probe_native_catalog
     from reasoning_settings import ReasoningSettings
     from image_jobs import ImageJobs
     from image_rpc import generate_image, ImageGenerationError
-    def factory(): return RpcSession(config['codexExecutable'],str(work))
+    def factory(): return RpcSession(executable,str(work))
     # Only account/read + model/list at startup; no thread or turn is created.
-    proof=probe_native_catalog(config['codexExecutable'],str(work),cache_path=root/'model-catalog.json')
+    proof=probe_native_catalog(executable,str(work),cache_path=root/'model-catalog.json')
     if args.probe:
         print(json.dumps(proof,ensure_ascii=False,indent=2)); return
     if not proof.get('account',{}).get('signedIn'):
@@ -261,10 +283,11 @@ def main():
     def image_generator(job_dir,prompt,references,aspect_ratio,transparent,cancelled,on_progress,resolution='auto'):
         def progress(event):
             phase=event.get('phase') if isinstance(event,dict) else None
-            if phase=='generating': on_progress('rendering')
+            if phase=='submitting': on_progress('submitting',thread_id=event.get('threadId'))
+            if phase=='generating': on_progress('rendering',thread_id=event.get('threadId'),turn_id=event.get('turnId'))
             if phase=='completed': on_progress('finalizing')
         try:
-            return generate_image(config['codexExecutable'],job_dir,prompt,references,
+            return generate_image(executable,job_dir,prompt,references,
                                   aspect_ratio=aspect_ratio,transparent=transparent,resolution=resolution,
                                   cancelled=cancelled,on_progress=progress)
         except ImageGenerationError as error:
@@ -278,9 +301,11 @@ def main():
         while not stopped.wait(30): bridge.prune()
     stopped=threading.Event()
     threading.Thread(target=cleanup,daemon=True).start()
+    media_cleanup=threading.Thread(target=images.cleanup.loop,args=(stopped,),name='codex-media-cleanup',daemon=True)
+    media_cleanup.start()
     try: http.serve_forever(poll_interval=0.5)
     finally:
-        stopped.set(); http.server_close(); images.close(); bridge.close()
+        stopped.set(); media_cleanup.join(timeout=2); http.server_close(); images.close(); bridge.close()
         (state/'server.pid').unlink(missing_ok=True)
 
 

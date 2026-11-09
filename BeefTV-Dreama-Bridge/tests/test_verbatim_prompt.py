@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import quote
 from bridge import Bridge, BridgeError, DreamaGateway, PROJECT, SERIES
+from tests.fixtures_budget import FundedBridge as Bridge
 from tests.test_bridge import FakeGateway, request
 
 def official_tag(image_id):
@@ -53,14 +54,17 @@ class VerbatimPromptTests(unittest.TestCase):
         # The official assembler may add instructions. Only its reference tag
         # may enter the saved user prompt; its prose must never be forwarded.
         responses=[{'prompt':'<p>禁止字幕。参考图说明：'+tag+'</p>','mode':'drama'},
-                   {},{'items':[{'id':300}]},{'items':[{'id':300,'videoPrompt':expected}]}]
+                   {},{'items':[{'id':300}]},{},{'items':[{'id':300,'videoPrompt':expected}]}]
         gateway=DreamaGateway()
         with patch.object(gateway,'run',side_effect=responses) as cli, patch.object(gateway,'post',return_value={}) as post:
             try: result=gateway.save_and_readback(original,refs,4,'verbatim')
             except BridgeError as error: self.fail(str(error))
             create=cli.call_args_list[1].args
             self.assertNotIn('--prompt',create)
-            self.assertEqual(post.call_args.args[1]['videoPrompt'],expected)
+            update=cli.call_args_list[3].args
+            self.assertEqual(update[:2],('storyboard','update'))
+            self.assertEqual(update[update.index('--video-prompt')+1],expected)
+            post.assert_not_called()
             self.assertEqual(result['promptReferenceIndexes'],[0])
             self.assertEqual(result['promptPolicy'],'verbatim-v1')
 
@@ -69,7 +73,7 @@ class VerbatimPromptTests(unittest.TestCase):
         refs=[{'imageId':21,'name':'first'},{'imageId':32,'name':'second'}]
         a,b=official_tag(21),official_tag(32)
         expected='<p>'+b+' 看向 '+a+'，然后 '+b+' 转身。</p>'
-        responses=[{'prompt':'<p>'+a+b+'</p>','mode':'drama'}, {},{'items':[{'id':300}]},
+        responses=[{'prompt':'<p>'+a+b+'</p>','mode':'drama'}, {},{'items':[{'id':300}]},{},
                    {'items':[{'id':300,'videoPrompt':expected}]}]
         gateway=DreamaGateway()
         with patch.object(gateway,'run',side_effect=responses), patch.object(gateway,'post',return_value={}):

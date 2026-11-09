@@ -71,7 +71,7 @@ def _native_failure(error, default="image_generation_failed"):
                 if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599:
                     details["httpStatusCode"] = status
                 code = ("image_auth_required" if status == 401 else
-                        "image_quota_exceeded" if status == 429 else "image_unavailable")
+                        "image_quota_exceeded" if status == 429 else "image_submission_unknown")
                 break
     return ImageGenerationError("Codex could not complete this image request; it was not retried.",
                                 code, details=details)
@@ -216,6 +216,8 @@ def generate_image(executable, work_dir, prompt, references=None, *, aspect_rati
         raise ImageGenerationError("Invalid generation timeout.", "invalid_request")
     generated_root = _generated_root or Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "generated_images"
     rpc = None
+    submission_attempted = False
+    interrupt_requested = False
     deadline = time.monotonic() + timeout
     def checkpoint():
         if cancelled.is_set():
@@ -227,9 +229,9 @@ def generate_image(executable, work_dir, prompt, references=None, *, aspect_rati
         result = rpc.request(method, params, timeout=min(RPC_TIMEOUT, max(.01, deadline - time.monotonic())))
         checkpoint()
         return result
-    def progress(phase):
+    def progress(phase, **identity):
         if on_progress:
-            on_progress({"phase": phase})
+            on_progress({"phase": phase, **identity})
     try:
         progress("starting")
         checkpoint()
@@ -260,31 +262,57 @@ def generate_image(executable, work_dir, prompt, references=None, *, aspect_rati
                          "Use only the built-in image_gen.imagegen tool, exactly once. Do not use any other tool. "
                          "Keep the user's creative content and requested aspect ratio. Do not generate multiple variants, "
                          "retry a failed image call, or ask follow-up questions. Reference images are supplied in the user message.")
+        progress("submitting", threadId=rpc.thread_id)
         checkpoint()
-        rpc.start_turn(inputs, effort=effort)
-        checkpoint()
-        progress("generating")
-        while time.monotonic() < deadline:
-            if cancelled.is_set():
-                raise ImageGenerationError("Image generation was cancelled.", "image_cancelled")
+        submission_attempted = True
+        try:
+            rpc.start_turn(inputs, effort=effort)
+            if not isinstance(rpc.turn_id, str) or not rpc.turn_id:
+                raise ValueError("Invalid native turn ID")
+        except (KeyError, TypeError, ValueError) as error:
+            raise ImageGenerationError("Codex did not return a usable turn receipt.", "image_submission_unknown") from error
+        try:
+            progress("generating", threadId=rpc.thread_id, turnId=rpc.turn_id)
+        except Exception as error:
+            raise ImageGenerationError("The accepted turn receipt could not be stored.", "image_submission_unknown") from error
+        while True:
+            if cancelled.is_set() and not interrupt_requested:
+                interrupt_requested = True
+                try:
+                    rpc.cancel()
+                except RpcError:
+                    # The original turn may already have produced its terminal event.
+                    pass
+                deadline = time.monotonic() + 2
+            if time.monotonic() >= deadline:
+                break
             try:
                 event = rpc.next_event(timeout=min(.5, max(.01, deadline - time.monotonic())))
             except queue.Empty:
                 continue
             method, params = event.get("method"), event.get("params") or {}
+            if not isinstance(params, dict):
+                continue
             if params.get("threadId") not in (None, rpc.thread_id) or params.get("turnId") not in (None, rpc.turn_id):
                 continue
             if method == "bridge/process/exited":
-                raise ImageGenerationError("The local Codex process exited during image generation.", "image_unavailable")
+                raise ImageGenerationError("The local Codex process exited during image generation.", "image_submission_unknown")
             if "id" in event or method == "item/tool/call":
                 raise ImageGenerationError("Codex requested an unsupported external tool.", "unexpected_tool")
             if method == "error":
+                if params.get("threadId") != rpc.thread_id or params.get("turnId") != rpc.turn_id:
+                    continue
                 raise _native_failure(params.get("error"))
             if method == "item/completed":
                 item = params.get("item") or {}
+                if not isinstance(item, dict):
+                    continue
                 if item.get("type") != "imageGeneration":
                     if item.get("type") in {"commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall"}:
                         raise ImageGenerationError("An unsupported native tool was invoked.", "unexpected_tool")
+                    continue
+                if (params.get("threadId") != rpc.thread_id or params.get("turnId") != rpc.turn_id
+                        or not isinstance(item.get("id"), str) or not item["id"]):
                     continue
                 failure = item.get("failure") or {}
                 if failure.get("type") == "usageLimitExceeded":
@@ -305,15 +333,25 @@ def generate_image(executable, work_dir, prompt, references=None, *, aspect_rati
                         "source": "codex_builtin_imagegen"}
             if method == "turn/completed":
                 turn = params.get("turn") or {}
+                if not isinstance(turn, dict) or params.get("threadId") != rpc.thread_id or turn.get("id") != rpc.turn_id:
+                    continue
                 status = turn.get("status")
+                if status not in ("completed", "failed", "interrupted"):
+                    continue
+                if status == "interrupted":
+                    interrupt_requested = True
+                    raise ImageGenerationError("Codex confirmed the original turn was interrupted.", "image_cancelled")
                 if status == "failed" and turn.get("error"):
                     raise _native_failure(turn["error"])
-                code = "image_cancelled" if status == "interrupted" else "image_no_result"
-                raise ImageGenerationError("Codex ended the turn without a usable native image.", code)
+                raise ImageGenerationError("Codex ended the turn without a usable native image.", "image_no_result")
+        if interrupt_requested:
+            raise ImageGenerationError("Codex did not confirm interruption of the original turn.", "image_submission_unknown")
         raise ImageGenerationError("Image generation timed out; it was not automatically retried.", "image_timeout")
     except RpcError as error:
-        checkpoint()
-        raise ImageGenerationError("The local Codex connection failed; the request was not retried.", "image_unavailable",
+        if not submission_attempted:
+            checkpoint()
+        code = "image_submission_unknown" if submission_attempted else "image_unavailable"
+        raise ImageGenerationError("The local Codex connection failed; the request was not retried.", code,
                                    details={"nativeCode": error.code}) from error
     finally:
         if rpc is not None:
@@ -323,7 +361,8 @@ def generate_image(executable, work_dir, prompt, references=None, *, aspect_rati
                 # RpcSession bounds interrupt to 10s and close to 3 x 2s.
                 # Startup is bounded by catalog 30s + initialize 15s; with
                 # checkpoints, cancellation cannot enter another RPC stage.
-                rpc.cancel()
+                if not interrupt_requested:
+                    rpc.cancel()
             except Exception:
                 pass
             rpc.close()

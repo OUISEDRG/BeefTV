@@ -52,7 +52,7 @@ type attemptRuntime struct{ s *Service }
 func (p attemptRuntime) IsDraining() bool  { return p.s.IsDraining() }
 func (p attemptRuntime) Go(fn func()) bool { return p.s.runWorkerTask(fn) }
 func (p attemptRuntime) ForTask(ctx context.Context, task model.Task) context.Context {
-	return withProviderAnalytics(ctx, p.s, task)
+	return withProtocolRegistry(withProviderAnalytics(ctx, p.s, task), p.s.protocolRegistry())
 }
 func (p attemptRuntime) Bind(ctx context.Context, meta generation.CallMeta) context.Context {
 	return p.s.bindGenerationRuntime(ctx, meta)
@@ -70,4 +70,8 @@ func (p attemptCompletion) Save(task *model.Task, result, ops []byte, hasOps boo
 func (p attemptCompletion) Present(task *model.Task) *model.Task {
 	p.s.attachTaskDelivery(task)
 	return taskForOutput(*task)
+}
+
+func (p attemptCompletion) PersistMedia(task model.Task, result map[string]interface{}) (map[string]interface{}, error) {
+	return p.s.persistTaskGeneratedMediaResult(task, result)
 }

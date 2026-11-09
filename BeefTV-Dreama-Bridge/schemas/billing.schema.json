@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "estimatedPoints", "quotedPoints", "reservedPoints", "actualPoints", "billingSource", "settlementStatus"],
+  "$defs": {"points": {"type": ["string", "null"], "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"}},
+  "properties": {"schemaVersion": {"const": 1},
+    "intentId": {"type": "string", "minLength": 1},
+    "estimatedPoints": {"$ref": "#/$defs/points"}, "quotedPoints": {"$ref": "#/$defs/points"},
+    "reservedPoints": {"$ref": "#/$defs/points"}, "actualPoints": {"$ref": "#/$defs/points"},
+    "billingSource": {"enum": ["unknown", "estimated", "cli_quote", "compat_quote", "upstream_settlement"]},
+    "settlementStatus": {"enum": ["unsettled", "reserved", "unknown", "settled", "released", "variance"]}}
+}

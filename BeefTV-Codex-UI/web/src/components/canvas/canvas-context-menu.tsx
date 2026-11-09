@@ -8,6 +8,7 @@ import {
     Clipboard,
     CloudUpload,
     Copy,
+    Download,
     FolderOpen,
     FolderPlus,
     Image as ImageIcon,
@@ -53,6 +54,7 @@ type CanvasNodeContextMenuProps = {
     canRedo: boolean;
     canPaste: boolean;
     selectedCount?: number;
+    downloadableSelectionCount?: number;
     onClose: () => void;
     onAddNode: (type: CanvasNodeTypeId, position?: Position) => void;
     onAddFolder: () => void;
@@ -80,6 +82,7 @@ type CanvasNodeContextMenuProps = {
     onSetAssetCategory: (category: CanvasAssetCategory) => void;
     onToggleFrame: () => void;
     onSpreadSelection?: () => void;
+    onBatchDownloadSelection?: () => void;
     onCopySelection?: () => void;
     onDeleteSelection?: () => void;
 };
@@ -93,6 +96,7 @@ export function CanvasNodeContextMenu({
     canRedo,
     canPaste,
     selectedCount = 0,
+    downloadableSelectionCount = 0,
     onClose,
     onAddNode,
     onAddFolder,
@@ -120,6 +124,7 @@ export function CanvasNodeContextMenu({
     onSetAssetCategory,
     onToggleFrame,
     onSpreadSelection,
+    onBatchDownloadSelection,
     onCopySelection,
     onDeleteSelection,
 }: CanvasNodeContextMenuProps) {
@@ -173,6 +178,14 @@ export function CanvasNodeContextMenu({
     const assetCategory = node ? canvasNodeAssetCategory(node) : "other";
     const hasMultiSelection = selectedCount >= 2;
     const position = getContextMenuPosition(menu, hasMultiSelection);
+    const batchDownloadButton = (
+        <MenuButton
+            icon={<Download className="size-4" />}
+            label={downloadableSelectionCount ? `批量下载素材 (${downloadableSelectionCount})` : "批量下载素材"}
+            disabled={!downloadableSelectionCount || !onBatchDownloadSelection}
+            onClick={() => onBatchDownloadSelection && runAction(onBatchDownloadSelection)}
+        />
+    );
 
     return (
         <>
@@ -206,6 +219,7 @@ export function CanvasNodeContextMenu({
                             {hasMultiSelection ? (
                                 <>
                                     <MenuButton icon={<LayoutTemplate className="size-4" />} label="自适应整理画布" detail="保持相对布局并加大边距" disabled={!onSpreadSelection} onClick={() => onSpreadSelection && runAction(onSpreadSelection)} />
+                                    {batchDownloadButton}
                                     <MenuDivider />
                                 </>
                             ) : null}
@@ -223,6 +237,7 @@ export function CanvasNodeContextMenu({
                             <MenuHeader title={`已选 ${selectedCount} 个节点`} />
                             <MenuSection label="选区" />
                             <MenuButton icon={<LayoutTemplate />} label="自适应整理画布" detail="保持相对布局并加大边距" disabled={!onSpreadSelection} onClick={() => onSpreadSelection && runAction(onSpreadSelection)} />
+                            {batchDownloadButton}
                             <MenuDivider />
                             <MenuButton icon={<Copy />} label={`复制 ${selectedCount} 个节点`} shortcut="⌘C" disabled={!onCopySelection} onClick={() => onCopySelection && runAction(onCopySelection)} />
                             <MenuButton icon={<Trash2 />} label={`删除 ${selectedCount} 个节点`} danger disabled={!onDeleteSelection} onClick={() => onDeleteSelection && runAction(onDeleteSelection)} />

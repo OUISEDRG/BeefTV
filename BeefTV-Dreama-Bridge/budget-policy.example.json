@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "dailyLimitPoints": null,
+  "perOperationLimits": {
+    "video": null,
+    "image": null,
+    "extension": null,
+    "enhancement": null,
+    "audio": null
+  },
+  "timezone": null,
+  "dayStart": null
+}

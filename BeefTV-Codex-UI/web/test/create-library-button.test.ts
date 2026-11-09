@@ -53,16 +53,12 @@ describe("creation library button", () => {
         expect(source).toContain("个素材已上传到素材库并自动选中");
     });
 
-    test("previews prompt reference images without removing them", () => {
+    test("Create shows a media preview for message attachments", () => {
         const createSource = readCreateWorkspaceSource();
-        const canvasSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node-reference-shelf.tsx"), "utf8");
 
         expect(createSource).toContain('className="creation-user-message-attachments"');
         expect(createSource).toContain('setPreviewType(kind === "video" ? "video" : "image")');
         expect(createSource).toContain("<CreationMediaPreviewModal url={previewUrl} type={previewType}");
-        expect(canvasSource).toContain("canPreview ? setImagePreview(reference) : onInsert(reference)");
-        expect(canvasSource).toContain("<AntImage");
-        expect(canvasSource).toContain("onInsert(reference);");
     });
 
     test("参考内容层叠轨道支持折叠、展开和 Reorder 排序", () => {

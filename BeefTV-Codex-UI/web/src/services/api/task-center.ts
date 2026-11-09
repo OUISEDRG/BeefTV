@@ -48,6 +48,7 @@ export type GenerationTask = {
     model?: string;
     providerRequestId?: string;
     providerCancelStatus?: ProviderCancelStatus;
+    generationCancelUnsupported?: boolean;
     providerCancelError?: string;
     providerCancelAttempts?: number;
     providerCancelRequestedAt?: string;

@@ -395,6 +395,7 @@ export type CanvasNodeMetadata = {
     generationProviderCode?: string;
     taskFailureDiagnostics?: import("@/lib/generation-error").GenerationFailureDiagnostics;
     taskProviderRequestId?: string;
+    taskGenerationCancelUnsupported?: boolean;
     taskOfficialStatus?: "pending" | "processing" | "completed" | "failed" | "cancelled";
     taskReceiptRecorded?: boolean;
     taskCreatedAt?: string;

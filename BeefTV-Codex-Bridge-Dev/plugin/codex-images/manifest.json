@@ -1,8 +1,8 @@
 {
-  "apiVersion": "beeftv.plugin/v2",
+  "apiVersion": "beeftv.plugin/v3",
   "id": "codex-images",
   "name": "Codex 内置生图",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Local Codex Bridge",
   "description": "经本机桥接调用已登录 Codex 的内置生图。分辨率为生成目标，实际尺寸由模型决定。",
   "documentation": "使用本机 Codex 登录账号及其生图权限、额度。一次生成一张，支持最多 4 张参考图（每张 8 MiB，总计 16 MiB），不支持遮罩。1K/2K/4K/8K按最长边1024/2048/4096/8192像素写入原生生成要求；当前内置工具不能强制指定像素，因此是目标而非输出保证，不自动放大图片。结果会报告实际尺寸。比例是提示词约束，不保证严格宽高比。透明背景通过原生标志传递。生成可能需要数分钟，任务以异步轮询方式返回。",
@@ -41,7 +41,8 @@
         "path": "/v1/images/jobs",
         "originPath": true,
         "contentType": "application/json",
-        "headers": {"Idempotency-Key": {"$ref": "request.extra.idempotencyKey"}},
+        "headers": {"Idempotency-Key": {"$ref": "request.extra.idempotencyKey"},
+                    "X-BeefTV-Task-ID": {"$ref": "request.extra.beefTaskId"}},
         "body": {
           "model": {"$ref": "request.model"},
           "prompt": {"$ref": "request.prompt"},
@@ -53,8 +54,12 @@
       },
       "poll": {"method": "GET", "path": "/v1/images/jobs/{{taskId}}", "originPath": true},
       "cancel": {"method": "DELETE", "path": "/v1/images/jobs/{{taskId}}", "originPath": true},
+      "ack": {"method": "POST", "path": "/v1/images/jobs/{{taskId}}/ack", "originPath": true,
+              "headers": {"Idempotency-Key": {"$ref": "request.extra.mediaAckKey"}},
+              "body": {"$ref": "request.extra.mediaAck"}},
       "response": {
-        "taskId": {"$coalesce": [{"$ref": "response.id"}, {"$ref": "taskId"}]},
+        "taskId": {"$ref": "response.id"},
+        "artifacts": {"$ref": "response.artifacts"},
         "status": {"$switch": {"cases": [
           {"when": {"$eq": [{"$ref": "response.status"}, "queued"]}, "then": "pending"},
           {"when": {"$eq": [{"$ref": "response.status"}, "running"]}, "then": "processing"}

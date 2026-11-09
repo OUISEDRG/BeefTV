@@ -42,7 +42,8 @@ class StudioContinuationTests(unittest.TestCase):
             rpc = FakeRPC([tool()])
             self.instances.append(rpc)
             return rpc
-        self.bridge = CompletionBridge(factory, ['gpt-6-astra'], timeout=.1)
+        self.bridge = CompletionBridge(factory, ['gpt-6-astra'], timeout=.1,
+                                       authorize_submission=lambda: None)
 
     def tearDown(self):
         self.bridge.close()

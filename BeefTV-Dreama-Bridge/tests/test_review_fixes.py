@@ -1,13 +1,17 @@
+from tests.fixtures_budget import intent_fields
 import copy
 import json
 import sqlite3
 import tempfile
 import unittest
+import dreama_image
+from dreama_compat import extension as compat_extension
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
 from bridge import Bridge, BridgeError, DreamaGateway
+from tests.fixtures_budget import FundedBridge as Bridge
 from generation import Generation
 from auto_execution import AutoExecution
 from tests.test_bridge import request
@@ -22,7 +26,7 @@ class AtomicCancellationTests(unittest.TestCase):
             engine=AutoExecution(bridge,lambda _:flow,{'mode':'manual'})
             with bridge.db() as db:
                 db.execute('INSERT INTO preparation_requests(key,payload) VALUES (?,?)',('one',''))
-            original_db=bridge.db; interleaving=[]
+            original_db=bridge.tasks.connect; interleaving=[]
             class Connection:
                 def __init__(self,connection): self.connection=connection
                 def execute(self,sql,args=()):
@@ -41,7 +45,7 @@ class AtomicCancellationTests(unittest.TestCase):
             @contextmanager
             def observed_db():
                 with original_db() as db: yield Connection(db)
-            with patch.object(bridge,'db',observed_db):
+            with patch.object(bridge.tasks,'connect',observed_db):
                 flow.approve('one',job['quoteId'],job['pointsEstimate'])
             self.assertEqual(interleaving,['submit-transaction-won'])
             self.assertEqual(gateway.calls.count('paid-submit'),1)
@@ -83,11 +87,11 @@ class CatalogRecoveryTests(unittest.TestCase):
         class Gateway(BoundGateway):
             def catalogs(self):return fresh_catalogs()
         for kind in ('video','extension','image'):
-            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None),patch.object(extension,'LIVE_ITEMS',None):
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
                 gateway=Gateway();Bridge(root,gateway)
                 original=catalog(gateway=gateway,state_root=root)
                 before=(Path(root)/CACHE_NAME).read_bytes()
-                memory=copy.deepcopy((model_catalog.LIVE_ITEMS,image_flow.LIVE_ITEMS,extension.LIVE_ITEMS))
+                memory=copy.deepcopy((model_catalog.LIVE_ITEMS,dreama_image.LIVE_ITEMS,compat_extension.LIVE_ITEMS))
                 invalid=fresh_catalogs()
                 if kind=='image':
                     next(item for item in invalid[kind] if item.get('isExternal')==0)['proportionList']=[]
@@ -97,9 +101,9 @@ class CatalogRecoveryTests(unittest.TestCase):
                 with patch.object(gateway,'catalogs',return_value=invalid),self.assertRaises(BridgeError):
                     catalog(gateway=gateway,state_root=root)
                 self.assertEqual((Path(root)/CACHE_NAME).read_bytes(),before)
-                self.assertEqual((model_catalog.LIVE_ITEMS,image_flow.LIVE_ITEMS,extension.LIVE_ITEMS),memory)
+                self.assertEqual((model_catalog.LIVE_ITEMS,dreama_image.LIVE_ITEMS,compat_extension.LIVE_ITEMS),memory)
                 self.assertEqual(catalog(),original)
-                model_catalog.LIVE_ITEMS=image_flow.LIVE_ITEMS=extension.LIVE_ITEMS=None
+                model_catalog.LIVE_ITEMS=dreama_image.LIVE_ITEMS=compat_extension.LIVE_ITEMS=None
                 Bridge(root,gateway)
                 self.assertEqual(catalog(),original)
                 self.assertEqual(model_catalog.resolve_model('50347e68-2b4c-49da-8c45-426432bba793','1080p')['id'],'fresh-eid')
@@ -111,14 +115,14 @@ class CatalogRecoveryTests(unittest.TestCase):
         invalid=fresh_catalogs()
         row=copy.deepcopy(next(item for item in invalid['video'] if item['eid']=='50347e68-2b4c-49da-8c45-426432bba793'))
         row['eid']='duplicate-480-eid';invalid['video'].append(row)
-        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None),patch.object(extension,'LIVE_ITEMS',None):
+        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
             # Reproduce the former on-disk format with a valid checksum but a
             # catalog that cannot be consumed by normal profile construction.
             persist(root,invalid)
             with self.assertRaises(BridgeError):Bridge(root,BoundGateway())
             self.assertIsNone(model_catalog.LIVE_ITEMS)
-            self.assertIsNone(image_flow.LIVE_ITEMS)
-            self.assertIsNone(extension.LIVE_ITEMS)
+            self.assertIsNone(dreama_image.LIVE_ITEMS)
+            self.assertIsNone(compat_extension.LIVE_ITEMS)
 
     def test_global_video_profile_uses_project_ratio_source_not_a_fixed_canvas(self):
         from install_channel import channel
@@ -150,13 +154,13 @@ class CatalogRecoveryTests(unittest.TestCase):
         import model_catalog,image_flow,extension
         class Gateway(BoundGateway):
             def catalogs(self):return fresh_catalogs()
-        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None),patch.object(extension,'LIVE_ITEMS',None):
+        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
             gateway=Gateway();bridge=Bridge(root,gateway);catalog(gateway=gateway,state_root=bridge.root)
             before=(Path(root)/CACHE_NAME).read_bytes()
             with patch('catalog_cache.os.replace',side_effect=OSError('interrupted')),self.assertRaises(OSError):
                 catalog(gateway=gateway,state_root=bridge.root)
             self.assertEqual((Path(root)/CACHE_NAME).read_bytes(),before)
-            model_catalog.LIVE_ITEMS=image_flow.LIVE_ITEMS=extension.LIVE_ITEMS=None
+            model_catalog.LIVE_ITEMS=dreama_image.LIVE_ITEMS=compat_extension.LIVE_ITEMS=None
             Bridge(root,gateway)
             self.assertEqual(model_catalog.resolve_model('50347e68-2b4c-49da-8c45-426432bba793','1080p')['id'],'fresh-eid')
 
@@ -180,11 +184,11 @@ class CatalogRecoveryTests(unittest.TestCase):
         import model_catalog,image_flow,extension
         class Gateway(BoundGateway):
             def catalogs(self):return fresh_catalogs()
-        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None),patch.object(extension,'LIVE_ITEMS',None):
+        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
             gateway=Gateway();bridge=Bridge(root,gateway);catalog(gateway=gateway,state_root=bridge.root)
             data={**request(),'model':'50347e68-2b4c-49da-8c45-426432bba793','resolution':'1080p','dreama':metadata()}
             original=bridge.prepare(data,'prepared-fresh')
-            model_catalog.LIVE_ITEMS=image_flow.LIVE_ITEMS=extension.LIVE_ITEMS=None
+            model_catalog.LIVE_ITEMS=dreama_image.LIVE_ITEMS=compat_extension.LIVE_ITEMS=None
             restarted=Bridge(root,gateway);job=restarted.get('prepared-fresh');native=DreamaGateway()
             with patch.object(native,'identity',return_value={'userId':17}),patch.object(native,'verify_project'),patch.object(native,'run',return_value={'id':91,'promptMode':'drama','proportion':'9:16'}),patch.object(native,'_invoke',return_value={'items':fresh_catalogs()['video']}) as invoke,patch.object(native,'inspect_board',return_value={}),patch.object(native,'check_character_references'):
                 native.check_ready(job)
@@ -199,7 +203,7 @@ class CatalogRecoveryTests(unittest.TestCase):
         import model_catalog,image_flow,extension
         class Gateway(BoundGateway):
             def catalogs(self):return fresh_catalogs()
-        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None),patch.object(extension,'LIVE_ITEMS',None):
+        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
             gateway=Gateway();bridge=Bridge(root,gateway);catalog(gateway=gateway,state_root=bridge.root)
             original=(Path(root)/CACHE_NAME).read_bytes()
             with patch.object(gateway,'catalogs',return_value={'video':[]}),self.assertRaises(BridgeError):
@@ -214,10 +218,10 @@ class CatalogRecoveryTests(unittest.TestCase):
         import model_catalog,image_flow,extension
         class Gateway(BoundGateway):
             def catalogs(self): return fresh_catalogs()
-        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None),patch.object(extension,'LIVE_ITEMS',None):
+        with tempfile.TemporaryDirectory() as root,patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
             gateway=Gateway();bridge=Bridge(root,gateway)
             catalog(gateway=gateway,state_root=bridge.root)
-            model_catalog.LIVE_ITEMS=image_flow.LIVE_ITEMS=extension.LIVE_ITEMS=None
+            model_catalog.LIVE_ITEMS=dreama_image.LIVE_ITEMS=compat_extension.LIVE_ITEMS=None
             Bridge(root,gateway)
             self.assertEqual(resolve_model('50347e68-2b4c-49da-8c45-426432bba793','1080p')['id'],'fresh-eid')
 
@@ -225,7 +229,7 @@ class CatalogRecoveryTests(unittest.TestCase):
         gateway=DreamaGateway()
         spec={'id':'fresh-eid','resolution':'1080P','durations':[5]}
         job={'status':'submitting','approvedAt':1,'model':'fresh-eid','duration':5,'storyboardId':9,
-             'modelSnapshot':spec}
+             'modelSnapshot':spec, **intent_fields(1)}
         with patch.object(gateway,'_invoke',return_value={'taskId':1}) as invoke:
             gateway.submit_video(job)
         self.assertEqual(invoke.call_args.args[invoke.call_args.args.index('--llm')+1],'fresh-eid')

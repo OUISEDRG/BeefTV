@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"infinite-canvas/backend/internal/dreamaintegration"
 	"infinite-canvas/backend/internal/generation"
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
@@ -48,6 +49,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		Model:                     task.Model,
 		ProviderRequestID:         task.ProviderRequestID,
 		ProviderCancelStatus:      task.ProviderCancelStatus,
+		CancelUnsupported:         dreamaintegration.MatchesGenerationTask(task.InputJSON),
 		ProviderCancelError:       task.ProviderCancelError,
 		ProviderCancelAttempts:    task.ProviderCancelAttempts,
 		ProviderCancelRequestedAt: task.ProviderCancelRequestedAt,
@@ -229,6 +231,7 @@ func truncateRunes(value string, limit int) string {
 func taskForOutput(task model.Task) *model.Task {
 	task = correctPersistedVODParameterFailure(task)
 	task.FailureDiagnostics = generation.SanitizeTaskDiagnostics(task.FailureDiagnostics)
+	task.CancelUnsupported = dreamaintegration.MatchesGenerationTask(task.InputJSON)
 	task.InputJSON = publicTaskInputJSON(task.InputJSON)
 	// 普通任务接口只暴露前台模型身份；渠道模型和供应线路属于管理员内部信息。
 	task.LogicalModelRevisionID = ""

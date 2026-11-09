@@ -67,7 +67,7 @@ export function CanvasProjectStatusDialogs({ theme, task, taskLogs, taskLoading,
                                 <Button loading={retrievingTaskId === task.id} onClick={() => onRetrieveTask(task)}>取回结果</Button>
                             </div>
                         ) : null}
-                        {onCancelTask && (task.status === "queued" || task.status === "running") ? (
+                        {onCancelTask && !task.generationCancelUnsupported && (task.status === "queued" || task.status === "running") ? (
                             <div className="flex justify-end">
                                 <Button danger icon={<XCircle className="size-4" />} onClick={() => onCancelTask(task)}>
                                     取消任务

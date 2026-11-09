@@ -132,7 +132,6 @@ function resourceIdFromTrustedLocalFileUrl(url: string) {
         if ((parsed.protocol === "http:" || parsed.protocol === "https:") && (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost")) {
             return resourceIdFromResourceFilePath(parsed.pathname);
         }
-        if (url.startsWith("/")) return resourceIdFromResourceFilePath(parsed.pathname);
         return "";
     } catch {
         return "";

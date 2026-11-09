@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from bridge import Bridge, BridgeError, DreamaGateway
+from tests.fixtures_budget import FundedBridge as Bridge
 import model_catalog
 import server
 from tests.test_bridge import request as image_request
@@ -28,10 +29,10 @@ def metadata(path):
 
 
 class MediaGateway(OfflineAudioGateway):
-    def _invoke(self,*args):
+    def run(self,*args):
         if args[:2]==('prompt','assemble'):
             return {'mode':'drama','prompt':'<p>'+official_tag(200)+'</p>'}
-        return super()._invoke(*args)
+        return super().run(*args)
 
     def upload_video_reference(self,path,meta):
         self.assert_metadata(path,meta)

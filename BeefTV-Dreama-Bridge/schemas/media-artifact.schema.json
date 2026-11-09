@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "taskId", "artifactId", "outputIndex", "sha256", "sizeBytes", "mimeType"],
+  "properties": {"schemaVersion": {"const": 1}, "taskId": {"type": "string", "minLength": 1}, "artifactId": {"type": "string", "minLength": 1},
+    "outputIndex": {"type": "integer", "minimum": 0}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sizeBytes": {"type": "integer", "minimum": 1}, "mimeType": {"enum": ["image/png", "image/jpeg", "image/webp", "video/mp4", "audio/mpeg", "audio/wav", "audio/ogg"]}}
+}

@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,14 +24,24 @@ const maxSaveFileNameBytes = 180
 const maxOwnedArtifactBytes = 32 << 20
 
 func (r *Runtime) CopyOwnedResourceTo(resourceID, destPath string) error {
+	dest, err := sanitizeSaveDestination(destPath)
+	if err != nil {
+		return err
+	}
+	return r.copyOwnedResourceTo(resourceID, dest, replaceFile)
+}
+
+// CopyOwnedResourceToNewFile publishes a batch entry without replacing an
+// existing destination. The caller supplies a validated filename and folder.
+func (r *Runtime) CopyOwnedResourceToNewFile(resourceID, dest string) error {
+	return r.copyOwnedResourceTo(resourceID, dest, publishNewOwnedFile)
+}
+
+func (r *Runtime) copyOwnedResourceTo(resourceID, dest string, publish func(string, string) error) error {
 	if r == nil || r.service == nil {
 		return errors.New("本地后端尚未就绪")
 	}
 	id, err := sanitizeOwnedResourceID(resourceID)
-	if err != nil {
-		return err
-	}
-	dest, err := sanitizeSaveDestination(destPath)
 	if err != nil {
 		return err
 	}
@@ -47,7 +58,10 @@ func (r *Runtime) CopyOwnedResourceTo(resourceID, destPath string) error {
 		return err
 	}
 	defer src.Close()
-	return writeOwnedFileAtomically(dest, src, src)
+	return writeOwnedFileAndPublish(dest, src, func(writer io.Writer) error {
+		_, err := io.Copy(writer, src)
+		return err
+	}, publish)
 }
 
 func WriteOwnedArtifact(dest string, data []byte) error {
@@ -78,7 +92,11 @@ func writeOwnedFileAtomically(dest string, body io.Reader, src *os.File) (return
 	})
 }
 
-func writeOwnedFileWith(dest string, src *os.File, write func(io.Writer) error) (returnErr error) {
+func writeOwnedFileWith(dest string, src *os.File, write func(io.Writer) error) error {
+	return writeOwnedFileAndPublish(dest, src, write, replaceFile)
+}
+
+func writeOwnedFileAndPublish(dest string, src *os.File, write func(io.Writer) error, publish func(string, string) error) error {
 	if err := rejectSameFile(src, dest); err != nil {
 		return err
 	}
@@ -88,12 +106,8 @@ func writeOwnedFileWith(dest string, src *os.File, write func(io.Writer) error) 
 		return errors.New("无法写入所选位置")
 	}
 	temporaryPath := temporary.Name()
-	defer func() {
-		if returnErr != nil {
-			_ = temporary.Close()
-			_ = os.Remove(temporaryPath)
-		}
-	}()
+	defer os.Remove(temporaryPath)
+	defer temporary.Close()
 	if err := temporary.Chmod(0o600); err != nil && runtime.GOOS != "windows" {
 		return errors.New("无法写入所选位置")
 	}
@@ -106,10 +120,7 @@ func writeOwnedFileWith(dest string, src *os.File, write func(io.Writer) error) 
 	if err := temporary.Close(); err != nil {
 		return errors.New("无法写出文件")
 	}
-	if err := replaceFile(temporaryPath, dest); err != nil {
-		return err
-	}
-	return nil
+	return publish(temporaryPath, dest)
 }
 
 func rejectSameFile(src *os.File, dest string) error {
@@ -141,6 +152,26 @@ func replaceFile(tmpPath, dest string) error {
 		return errors.New("无法保存到所选位置")
 	}
 	return nil
+}
+
+func publishNewOwnedFile(tempPath, dest string) error {
+	directory, name := filepath.Split(dest)
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	candidate := dest
+	for index := 2; index <= 10_000; index++ {
+		err := publishFileWithoutReplacing(tempPath, candidate)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return errors.New("无法保存到所选文件夹")
+		}
+		suffix := fmt.Sprintf(" (%d)", index)
+		name := truncateToUTF8Bytes(base, maxSaveFileNameBytes-len(ext)-len(suffix)) + suffix + ext
+		candidate = filepath.Join(directory, name)
+	}
+	return errors.New("所选文件夹内的同名文件过多")
 }
 
 func sanitizeOwnedResourceID(resourceID string) (string, error) {

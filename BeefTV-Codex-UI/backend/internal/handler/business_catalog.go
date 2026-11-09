@@ -39,7 +39,7 @@ func businessRouteAllowed(method, p string) bool {
 	if strings.HasPrefix(p, "/integrations/") {
 		switch method + " " + p {
 		case "GET /integrations/dreama/v1/status", "GET /integrations/dreama/v1/projects", "GET /integrations/dreama/v1/series", "GET /integrations/dreama/v1/catalog", "GET /integrations/dreama/v1/tasks",
-			"POST /integrations/dreama/v1/series", "POST /integrations/dreama/v1/ensure", "POST /integrations/dreama/v1/catalog/refresh", "POST /integrations/dreama/v1/tasks/:id/cancel":
+			"POST /integrations/dreama/v1/series", "POST /integrations/dreama/v1/ensure", "POST /integrations/dreama/v1/catalog/refresh":
 			return true
 		default:
 			return false

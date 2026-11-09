@@ -13,7 +13,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import image_rpc
-from codex_rpc import isolated_overrides
+from codex_rpc import RpcError, isolated_overrides
 
 
 def png():
@@ -28,6 +28,11 @@ def image_event(data=None, **extra):
         'item': {'type': 'imageGeneration', 'id': 'image-test', 'status': 'completed',
                  'result': base64.b64encode(png() if data is None else data).decode(),
                  **extra}}}
+
+
+def turn_event(status='completed', turn_id='turn-image-test', **extra):
+    return {'method': 'turn/completed', 'params': {'threadId': 'thread-image-test',
+            'turn': {'id': turn_id, 'status': status, **extra}}}
 
 
 class FakeRpc:
@@ -95,8 +100,8 @@ class ImageRpcTests(unittest.TestCase):
                                         _rpc_factory=fake.factory, _generated_root=self.generated, **kwargs)
     def test_one_native_image_and_no_second_turn(self):
         fake = FakeRpc([image_event(), image_event()])
-        phases = []
-        result = self.generate(fake, on_progress=lambda x: phases.append(x['phase']))
+        progress = []
+        result = self.generate(fake, on_progress=progress.append)
         self.assertEqual(result['images'][0]['bytes'], png())
         self.assertEqual(result['images'][0]['width'], 8)
         self.assertEqual(result['model'], 'available-default')
@@ -107,12 +112,30 @@ class ImageRpcTests(unittest.TestCase):
         self.assertEqual(fake.factory_flags, {'image_generation': True, 'request_timeout': 15.0})
         self.assertEqual(fake.cancel_count, 1)
         self.assertTrue(fake.closed)
-        self.assertEqual(phases, ['starting', 'generating', 'completed'])
+        self.assertEqual([event['phase'] for event in progress], ['starting', 'submitting', 'generating', 'completed'])
+        self.assertEqual(progress[1], {'phase': 'submitting', 'threadId': 'thread-image-test'})
+        self.assertEqual(progress[2], {'phase': 'generating', 'threadId': 'thread-image-test', 'turnId': 'turn-image-test'})
         turn = next(p for m,p in fake.calls if m=='turn/start')
         self.assertEqual(turn['effort'], 'low')
+    def test_native_events_preserve_png_jpeg_and_webp_bytes(self):
+        for format, mime in (('PNG', 'image/png'), ('JPEG', 'image/jpeg'), ('WEBP', 'image/webp')):
+            with self.subTest(format=format):
+                stream = BytesIO()
+                Image.new('RGB', (8, 6), '#2468ac').save(stream, format=format)
+                data = stream.getvalue()
+                encoded = f'data:{mime};base64,' + base64.b64encode(data).decode('ascii')
+                event = image_event()
+                event['params']['item']['result'] = encoded
+                fake = FakeRpc([event])
+                result = self.generate(fake)
+                self.assertEqual(result['images'][0]['bytes'], data)
+                self.assertEqual(result['images'][0]['mime'], mime)
+                self.assertEqual(result['actual_dimensions'], '8x6')
+                self.assertEqual([method for method, _ in fake.calls].count('turn/start'), 1)
+
     def test_text_alone_never_counts_as_generated_image(self):
         fake = FakeRpc([{'method':'item/completed','params':{'item':{'type':'agentMessage','text':'Done, see image.png'}}},
-                        {'method':'turn/completed','params':{'turn':{'status':'completed'}}}])
+                        turn_event()])
         with self.assertRaises(image_rpc.ImageGenerationError) as error:
             self.generate(fake)
         self.assertEqual(error.exception.code, 'image_no_result')
@@ -128,12 +151,12 @@ class ImageRpcTests(unittest.TestCase):
         cases = [('usageLimitExceeded','image_quota_exceeded'),
                  ('unauthorized','image_auth_required'),
                  ('misalignmentPolicyViolation','image_refused'),
-                 ({'responseStreamConnectionFailed':{'httpStatusCode':503}},'image_unavailable')]
+                 ({'responseStreamConnectionFailed':{'httpStatusCode':503}},'image_submission_unknown')]
         for native, code in cases:
             with self.subTest(native=native):
                 fake=FakeRpc([{'method':'error','params':{'error':{
                     'message':'private provider text must not escape', 'codexErrorInfo':native},
-                    'willRetry':True}}])
+                    'threadId':'thread-image-test','turnId':'turn-image-test','willRetry':True}}])
                 with self.assertRaises(image_rpc.ImageGenerationError) as error:self.generate(fake)
                 self.assertEqual(error.exception.code,code)
                 self.assertNotIn('private',str(error.exception))
@@ -141,18 +164,33 @@ class ImageRpcTests(unittest.TestCase):
                 self.assertEqual(len([x for x in fake.calls if x[0]=='turn/start']),1)
                 self.assertTrue(fake.closed)
     def test_failed_turn_preserves_structured_auth_classification(self):
-        fake=FakeRpc([{'method':'turn/completed','params':{'turn':{
-            'status':'failed','error':{'message':'do not expose','codexErrorInfo':'unauthorized'}}}}])
+        fake=FakeRpc([turn_event('failed', error={'message':'do not expose','codexErrorInfo':'unauthorized'})])
         with self.assertRaises(image_rpc.ImageGenerationError) as error:self.generate(fake)
         self.assertEqual(error.exception.code,'image_auth_required')
         self.assertEqual(error.exception.details,{'nativeErrorInfo':'unauthorized'})
     def test_cancellation_interrupts_and_closes(self):
         cancel = threading.Event()
-        fake = FakeRpc(cancelled=cancel)
+        delta = {'method': 'item/agentMessage/delta', 'params': {}}
+        interrupted = {'method': 'turn/completed', 'params': {'threadId': 'thread-image-test',
+                       'turn': {'id': 'turn-image-test', 'status': 'interrupted'}}}
+        fake = FakeRpc([delta, interrupted], cancelled=cancel)
         with self.assertRaises(image_rpc.ImageGenerationError) as error:
             self.generate(fake,cancelled=cancel)
         self.assertEqual(error.exception.code,'image_cancelled')
         self.assertEqual(fake.cancel_count,1)
+        self.assertTrue(fake.closed)
+
+    def test_cancellation_needs_interrupted_event_for_original_turn(self):
+        cancel = threading.Event()
+        delta = {'method': 'item/agentMessage/delta', 'params': {}}
+        foreign = {'method': 'turn/completed', 'params': {'threadId': 'thread-image-test',
+                   'turn': {'id': 'another-turn', 'status': 'interrupted'}}}
+        exited = {'method': 'bridge/process/exited', 'params': {}}
+        fake = FakeRpc([delta, foreign, exited], cancelled=cancel)
+        with self.assertRaises(image_rpc.ImageGenerationError) as error:
+            self.generate(fake, cancelled=cancel)
+        self.assertEqual(error.exception.code, 'image_submission_unknown')
+        self.assertEqual(fake.cancel_count, 1)
         self.assertTrue(fake.closed)
     def test_cancel_during_setup_stops_before_next_rpc_or_inference(self):
         for stage in ('factory','modelProvider/capabilities/read','account/read','model/list','thread/start'):
@@ -275,12 +313,56 @@ class ImageRpcTests(unittest.TestCase):
             self.assertEqual(error.exception.code,'invalid_image')
     def test_cross_thread_images_and_external_tools_are_not_accepted(self):
         wrong=image_event();wrong['params']['threadId']='another-thread'
-        fake=FakeRpc([wrong,{'method':'turn/completed','params':{'turn':{'status':'completed'}}}])
+        fake=FakeRpc([wrong,turn_event()])
         with self.assertRaises(image_rpc.ImageGenerationError) as error:self.generate(fake)
         self.assertEqual(error.exception.code,'image_no_result')
         fake=FakeRpc([{'id':1,'method':'item/tool/call','params':{'tool':'exec_command'}}])
         with self.assertRaises(image_rpc.ImageGenerationError) as error:self.generate(fake)
         self.assertEqual(error.exception.code,'unexpected_tool')
+
+    def test_image_with_missing_turn_identity_is_not_delivered(self):
+        event = image_event()
+        del event['params']['turnId']
+        fake = FakeRpc([event, turn_event()])
+        with self.assertRaises(image_rpc.ImageGenerationError) as error:
+            self.generate(fake)
+        self.assertEqual(error.exception.code, 'image_no_result')
+
+    def test_foreign_completion_and_unscoped_error_cannot_end_original_turn(self):
+        unexpected = [turn_event(turn_id='foreign'), turn_event('failed', turn_id='foreign'),
+                      {'method': 'error', 'params': {'error': {'codexErrorInfo': 'unauthorized'}}},
+                      {'method': 'turn/completed', 'params': {'threadId': 'thread-image-test', 'turn': ['malformed']}}]
+        for event in unexpected:
+            with self.subTest(event=event):
+                result = self.generate(FakeRpc([event, image_event()]))
+                self.assertEqual(result['images'][0]['bytes'], png())
+
+    def test_malformed_turn_acceptance_is_unknown_without_retry(self):
+        fake = FakeRpc()
+        def malformed(*args, **kwargs):
+            fake.calls.append(('turn/start', {}))
+            raise KeyError('turn')
+        fake.start_turn = malformed
+        with self.assertRaises(image_rpc.ImageGenerationError) as error:
+            self.generate(fake)
+        self.assertEqual(error.exception.code, 'image_submission_unknown')
+        self.assertEqual([method for method, _ in fake.calls].count('turn/start'), 1)
+        self.assertTrue(fake.closed)
+
+    def test_transport_failure_after_submission_is_unknown_without_retry(self):
+        for stage in ('turn/start', 'process-exit'):
+            with self.subTest(stage=stage):
+                fake = FakeRpc([{'method': 'bridge/process/exited', 'params': {}}])
+                def lose_response(*args, **kwargs):
+                    fake.calls.append(('turn/start', {}))
+                    raise RpcError('lost response')
+                if stage == 'turn/start':
+                    fake.start_turn = lose_response
+                with self.assertRaises(image_rpc.ImageGenerationError) as error:
+                    self.generate(fake)
+                self.assertEqual(error.exception.code, 'image_submission_unknown')
+                self.assertEqual([method for method, _ in fake.calls].count('turn/start'), 1)
+                self.assertTrue(fake.closed)
     def test_image_opt_in_preserves_other_isolation_and_default_behavior(self):
         env={'CODEX_HOME':str(self.root)}
         default=dict(x.split('=',1) for x in isolated_overrides('catalog',env))

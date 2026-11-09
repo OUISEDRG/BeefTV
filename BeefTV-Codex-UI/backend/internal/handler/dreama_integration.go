@@ -48,7 +48,7 @@ func registerDreamaIntegrationRoutes(r *gin.RouterGroup, bootstrap workspaceBoot
 			ok(c, result)
 		})
 	}
-	for _, path := range []string{"series", "ensure", "catalog/refresh", "tasks/:id/cancel"} {
+	for _, path := range []string{"series", "ensure", "catalog/refresh"} {
 		route := path
 		group.POST("/"+route, func(c *gin.Context) {
 			if _, err := workspaceForLocalRequest(c, bootstrap); err != nil {
@@ -118,12 +118,8 @@ func registerDreamaIntegrationRoutes(r *gin.RouterGroup, bootstrap workspaceBoot
 				ok(c, result)
 				return
 			}
-			upstream := route
-			if route == "tasks/:id/cancel" {
-				upstream = "tasks/" + c.Param("id") + "/cancel"
-			}
 			payload, _ := json.Marshal(fields)
-			result, e := service.Exchange(c.Request.Context(), channelID, http.MethodPost, upstream, nil, payload)
+			result, e := service.Exchange(c.Request.Context(), channelID, http.MethodPost, route, nil, payload)
 			if e != nil {
 				dreamaFailure(c, e)
 				return

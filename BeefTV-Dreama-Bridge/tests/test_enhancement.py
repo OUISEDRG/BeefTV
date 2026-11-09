@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import base64
 import copy
 import json
@@ -25,7 +26,7 @@ def prepared_job(model='dreama-enhance-a'):
             'sourceDuration':4.01,'sourceVideoUrl':SOURCE,'clientRequestId':'beeftv-enhance:unique',
             'identity':{'userId':17921,'teamId':168,'orgId':17},
             'sourceVideo':{'width':320,'height':480,'duration':4.01,'fps':24,'hasAudio':False},
-            'status':'submitting','approvedAt':1,'pointsEstimate':5,'approvedPoints':5}
+            'status':'submitting','approvedAt':1,'pointsEstimate':5,'approvedPoints':5, **intent_fields(5)}
 
 def task_row(job=None,status='COMPLETED'):
     job=job or prepared_job()

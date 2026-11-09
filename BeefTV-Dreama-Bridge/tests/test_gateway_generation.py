@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import unittest
 from unittest.mock import patch
 from bridge import DreamaGateway,BridgeError
@@ -11,7 +12,7 @@ class GatewayGenerationTests(unittest.TestCase):
             with self.assertRaises(BridgeError): gateway.submit_video({'status':'prepared'})
             self.assertEqual(execute.call_count,0)
             for spec in models().values():
-                job={'status':'submitting','approvedAt':1,'model':spec['id'],'duration':spec['durations'][0],'storyboardId':123}
+                job={'status':'submitting','approvedAt':1,'model':spec['id'],'duration':spec['durations'][0],'storyboardId':123, **intent_fields(1)}
                 gateway.submit_video(job)
                 args=execute.call_args.args
                 self.assertEqual(args[args.index('--llm')+1],spec['id'])

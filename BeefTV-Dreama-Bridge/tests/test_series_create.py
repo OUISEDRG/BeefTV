@@ -7,6 +7,7 @@ import unittest
 import requests
 
 from bridge import Bridge, BridgeError
+from tests.fixtures_budget import FundedBridge as Bridge
 from integration import create_series
 from server import make_server
 

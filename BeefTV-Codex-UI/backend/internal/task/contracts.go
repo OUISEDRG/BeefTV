@@ -116,6 +116,7 @@ type Summary struct {
 	Model                     string                        `json:"model,omitempty"`
 	ProviderRequestID         string                        `json:"providerRequestId,omitempty"`
 	ProviderCancelStatus      model.ProviderCancelStatus    `json:"providerCancelStatus,omitempty"`
+	CancelUnsupported         bool                          `json:"generationCancelUnsupported,omitempty"`
 	ProviderCancelError       string                        `json:"providerCancelError,omitempty"`
 	ProviderCancelAttempts    int                           `json:"providerCancelAttempts,omitempty"`
 	ProviderCancelRequestedAt *time.Time                    `json:"providerCancelRequestedAt,omitempty"`

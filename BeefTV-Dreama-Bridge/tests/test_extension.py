@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import base64
 import copy
 import hashlib
@@ -12,6 +13,7 @@ from urllib.parse import quote,unquote
 from pathlib import Path
 from unittest.mock import patch
 from bridge import Bridge,BridgeError,PROJECT,SERIES
+from tests.fixtures_budget import FundedBridge as Bridge
 from enhancement import probe_video
 try:
     import extension as e
@@ -73,7 +75,7 @@ class FakeGateway(e.ExtensionGateway if e else object):
             from tests.test_verbatim_prompt import official_tag
             return {'mode':'drama','prompt':'<p>不要带入的附加说明'+official_tag(21)+official_tag(32)+'</p>'}
         raise AssertionError('Unexpected CLI call in fake: '+str(args[:2]))
-    def _request(self,path,payload,*,paid=False):
+    def _request(self,path,payload,*,paid=False,job=None):
         self.calls.append((path,copy.deepcopy(payload),paid))
         if path=='/storyboard/api/save':self.row.update(payload);return {}
         if path=='/storyboard/api/list':return {'list':[copy.deepcopy(self.row)]}
@@ -216,7 +218,7 @@ class ExtensionFlowTests(unittest.TestCase):
     def test_submit_deduplicates_identical_reference_urls_in_mention_order(self):
         job={'kind':'extension','status':'submitting','approvedAt':1,'approvedPoints':76,'pointsEstimate':76,
              'model':MODEL,'storyboardId':1001,'duration':5,'sourceVideoUrl':SOURCE,
-             'references':[{'url':'https://jzinnovation.jxbaobian.cn/same.png'}]*2,'promptReferenceIndexes':[1,0,1]}
+             'references':[{'url':'https://jzinnovation.jxbaobian.cn/same.png'}]*2,'promptReferenceIndexes':[1,0,1], **intent_fields(76)}
         self.g.row={};self.g.submit_video(job)
         payload=next(p for _,p,paid in self.g.calls if paid)
         self.assertEqual(payload['images'],[SOURCE,'https://jzinnovation.jxbaobian.cn/same.png'])
@@ -283,7 +285,7 @@ class ExtensionFlowTests(unittest.TestCase):
     def test_source_change_and_quote_change_require_new_preparation_or_confirmation(self):
         job=self.flow.prepare(request(),'ext-1');self.g.price=80
         with self.assertRaises(BridgeError):self.flow.approve(job['id'],job['quoteId'],76)
-        current=self.b.get(job['id']);self.assertEqual(current['pointsEstimate'],80);self.assertNotEqual(current['quoteId'],job['quoteId'])
+        current=self.b.get(job['id']);self.assertEqual(current['pointsEstimate'],'80');self.assertNotEqual(current['quoteId'],job['quoteId'])
         (self.flow.inputs/job['sourceKey']).write_bytes(b'changed')
         with self.assertRaises(BridgeError):self.flow.approve(job['id'],current['quoteId'],80)
         self.assertFalse(any(paid for _,_,paid in self.g.calls))

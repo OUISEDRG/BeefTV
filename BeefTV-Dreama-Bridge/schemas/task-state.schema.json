@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false, "required": ["schemaVersion", "state", "revision"],
+  "properties": {"schemaVersion": {"const": 1}, "revision": {"type": "integer", "minimum": 0},
+    "state": {"enum": ["received", "preparing", "prepared", "validating", "submission_intent", "submission_unknown", "submitted", "queued", "processing", "artifact_ready", "delivery_pending", "completed", "failed", "blocked", "recovery_required"]}},
+  "x-transitions": {
+    "received": ["preparing", "prepared", "failed", "blocked", "recovery_required"],
+    "preparing": ["prepared", "failed", "blocked", "recovery_required"],
+    "prepared": ["validating", "blocked", "failed", "recovery_required"],
+    "validating": ["prepared", "submission_intent", "blocked", "failed", "recovery_required"],
+    "submission_intent": ["submission_unknown", "submitted", "failed"],
+    "submission_unknown": ["submitted", "recovery_required", "failed"],
+    "submitted": ["queued", "processing", "artifact_ready", "failed", "blocked", "recovery_required", "submission_unknown"],
+    "queued": ["processing", "artifact_ready", "failed", "blocked", "recovery_required"],
+    "processing": ["queued", "artifact_ready", "failed", "blocked", "recovery_required"],
+    "artifact_ready": ["delivery_pending", "recovery_required"],
+    "delivery_pending": ["completed", "recovery_required"],
+    "completed": [], "failed": [],
+    "blocked": ["validating", "prepared", "failed"],
+    "recovery_required": ["preparing", "prepared", "submitted", "queued", "processing", "artifact_ready", "delivery_pending", "failed"]
+  }
+}

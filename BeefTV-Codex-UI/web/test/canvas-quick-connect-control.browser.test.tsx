@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type Locator, type Page } from "playwright";
 import { productCss } from "./fixtures/product-css";
 
 let browser: Browser;
@@ -80,5 +80,71 @@ test("未提供回调的提示词面板保留现有界面", async () => {
         await page.goto(`${server.url}?noToggle=1`);
         await page.getByRole("textbox", { name: "图片提示词" }).waitFor();
         expect(await page.getByRole("button", { name: "快速连线", exact: true }).count()).toBe(0);
+    } finally { await page.close(); }
+}, 30000);
+
+async function selectPromptText(editor: Locator, start: number, end = start) {
+    await editor.evaluate((element, rangeOffsets) => {
+        element.focus();
+        const text = Array.from(element.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.includes("左边右边"));
+        if (!text) throw new Error("找不到提示词正文");
+        const offset = text.textContent!.indexOf("左边右边");
+        const range = document.createRange();
+        range.setStart(text, offset + rangeOffsets.start);
+        range.setEnd(text, offset + rangeOffsets.end);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+    }, { start, end });
+}
+
+test("连续点击同名参考图按素材身份插入光标处并继续输入", async () => {
+    const page = await browser.newPage();
+    try {
+        await page.goto(`${server.url}?references=1`);
+        const editor = page.getByRole("textbox", { name: "图片提示词" });
+        await selectPromptText(editor, 2);
+        const shelf = page.getByRole("group", { name: "已连接素材" });
+        const thumbnail = (id: string) => shelf.locator(`[data-reference-node-id="${id}"] .canvas-node-reference-preview`);
+        expect(await thumbnail("unconnected").count()).toBe(0);
+        await thumbnail("reference-b").click({ clickCount: 2 });
+        await thumbnail("reference-a").click();
+        expect(await editor.evaluate(element => document.activeElement === element)).toBe(true);
+        await page.keyboard.insertText("继续");
+        expect((await state(page)).prompt).toBe("  第一行。\n左边@[node:reference-b] @[node:reference-b] @[node:reference-a] 继续右边，仍引用 @[node:reference-a]。  ");
+        expect((await state(page)).generationCount).toBe(0);
+    } finally { await page.close(); }
+}, 30000);
+
+test("放大编辑器的缩略图可用键盘替换原选区", async () => {
+    const page = await browser.newPage();
+    try {
+        await page.goto(`${server.url}?references=1`);
+        await page.getByRole("button", { name: "放大编辑提示词" }).click();
+        const dialog = page.getByRole("dialog");
+        const editor = dialog.getByRole("textbox", { name: "图片提示词" });
+        await selectPromptText(editor, 0, 2);
+        const thumbnail = dialog.locator('[data-reference-node-id="reference-b"] .canvas-node-reference-preview');
+        await thumbnail.focus();
+        await page.evaluate(() => window.getSelection()?.removeAllRanges());
+        await page.keyboard.press("Enter");
+        expect((await state(page)).prompt).toBe("  第一行。\n@[node:reference-b] 右边，仍引用 @[node:reference-a]。  ");
+        expect(await editor.locator('[data-mention-token="@[node:reference-b]"]').count()).toBe(1);
+        expect(await editor.evaluate(element => document.activeElement === element)).toBe(true);
+    } finally { await page.close(); }
+}, 30000);
+
+test("参考图预览可以独立打开且保留原提示词", async () => {
+    const page = await browser.newPage();
+    try {
+        await page.goto(`${server.url}?references=1`);
+        const chip = page.locator('[data-reference-node-id="reference-b"]');
+        const insert = chip.getByRole("button", { name: "插入 @图片2", exact: true });
+        const preview = chip.getByRole("button", { name: "预览 同名参考图", exact: true });
+        await preview.waitFor();
+        expect(await insert.count()).toBe(1);
+        await preview.focus();
+        await page.keyboard.press("Enter");
+        await page.locator(".ant-image-preview-img").waitFor();
+        expect((await state(page)).prompt).toBe("  第一行。\n左边右边，仍引用 @[node:reference-a]。  ");
     } finally { await page.close(); }
 }, 30000);

@@ -110,7 +110,7 @@ def package_manifest(data):
 def validate_owned_package(data):
     manifest = package_manifest(data)
     providers = manifest.get('contributes', {}).get('providers', [])
-    if (manifest.get('apiVersion') != 'beeftv.plugin/v2' or manifest.get('id') != PLUGIN_ID
+    if (manifest.get('apiVersion') not in ('beeftv.plugin/v2', 'beeftv.plugin/v3') or manifest.get('id') != PLUGIN_ID
             or manifest.get('author') != AUTHOR or len(providers) != 1
             or providers[0].get('id') != PROVIDER_ID):
         raise ValueError('同名插件不属于本机 Codex 生图集成，已停止覆盖。')

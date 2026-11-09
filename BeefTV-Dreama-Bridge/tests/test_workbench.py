@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import copy
 import json
 import tempfile
@@ -6,6 +7,7 @@ import unittest
 from unittest.mock import patch
 import requests
 from bridge import Bridge, BridgeError, DreamaGateway, PROJECT, SERIES
+from tests.fixtures_budget import FundedBridge as Bridge
 from tests.test_bridge import FakeGateway, request
 
 
@@ -38,7 +40,7 @@ class WorkbenchBindingTests(unittest.TestCase):
         gateway.credentials=SimpleNamespace(read_text=lambda encoding:'{"accessToken":"offline-test-token"}')
         token=CURRENT.set({**metadata(),'identity':{'userId':17}})
         try:
-            with patch.object(gateway,'identity',return_value={'userId':18}),patch('bridge.requests.post') as post:
+            with patch.object(gateway,'identity',return_value={'userId':18}),patch('dreama_compat.http.requests.post') as post:
                 with self.assertRaises(BridgeError):gateway.post('/storyboard/api/save',{'id':1})
                 self.assertEqual(post.call_count,0)
         finally:CURRENT.reset(token)
@@ -63,7 +65,7 @@ class WorkbenchBindingTests(unittest.TestCase):
                 if args[:2]==('library','list'):
                     name=args[args.index('--search')+1]
                     return {'items':[{'assetId':4,'name':name,'images':[{'imageId':5,'name':name,'resourceUrl':['https://image']}]}]}
-                if args[:2]==('storyboard','create'):return {}
+                if args[:2] in (('storyboard','create'),('storyboard','update')):return {}
                 if args[:2]==('storyboard','list'):
                     return {'items':[{'id':93,'projectId':91,'seriesId':92,'videoPrompt': '<p>plain</p>'}]}
                 if args[:2]==('point','calc'): return {'token':1}
@@ -116,11 +118,11 @@ class WorkbenchBindingTests(unittest.TestCase):
             except ImportError:
                 self.fail('Read-only release compatibility entry point is missing')
             state=inspect_ledger(root)
-            self.assertEqual(state['ledgerSchemaVersion'],2)
-            self.assertEqual(state['minimumReaderVersion'],2)
-            self.assertEqual(state['activeCounts'],{})
-            self.assertEqual(state['unresolvedCounts'],{'prepared':1})
-            self.assertTrue(state['safeToReplace'])
+            self.assertEqual(state['ledgerSchemaVersion'],6)
+            self.assertEqual(state['minimumReaderVersion'],3)
+            self.assertEqual(state['activeCounts'],{'prepared':1})
+            self.assertEqual(state['unresolvedCounts'],{})
+            self.assertFalse(state['safeToReplace'])
 
     def test_binding_is_frozen_before_first_remote_effect_and_cannot_be_overwritten(self):
         with tempfile.TemporaryDirectory() as root:
@@ -144,7 +146,7 @@ class WorkbenchBindingTests(unittest.TestCase):
     def test_paid_cli_and_reconciliation_read_frozen_ids_without_leaking_to_next_job(self):
         gateway=DreamaGateway()
         job={'model':request()['model'],'duration':5,'storyboardId':93,'status':'submitting','approvedAt':1,
-             'bindingSnapshot':{**metadata(),'identity':{'userId':17}}}
+             'bindingSnapshot':{**metadata(),'identity':{'userId':17}}, **intent_fields(1)}
         with patch.object(gateway,'_invoke',return_value={'taskId':1}) as invoke:
             gateway.submit_video(job)
             args=invoke.call_args.args
@@ -198,9 +200,10 @@ class WorkbenchQueueTests(unittest.TestCase):
             server=make_server(Bridge(root,Slow()),'test',0,policy={'mode':'manual'})
             try:
                 server.submit(request(),'one');self.assertTrue(entered.wait(2))
-                server.auto_execution.cancel('one');release.set();server.wait_for_jobs()
-                self.assertEqual(server.bridge.get('one')['status'],'cancelled')
-                self.assertEqual(server.bridge.gateway.calls,['upload'])
+                with self.assertRaises(BridgeError): server.auto_execution.cancel('one')
+                release.set();server.wait_for_jobs()
+                self.assertEqual(server.bridge.get('one')['status'],'prepared')
+                self.assertIn('save',server.bridge.gateway.calls)
             finally: release.set();server.server_close()
 
     def test_cancel_wins_atomic_last_submit_transition(self):
@@ -210,11 +213,10 @@ class WorkbenchQueueTests(unittest.TestCase):
             gateway=GenerationGateway();server=make_server(Bridge(root,gateway),'test',0,policy={'mode':'manual'})
             try:
                 server.submit(request(),'one');server.wait_for_jobs();job=server.bridge.get('one')
-                original=server.bridge.update
-                def raced(key,value):
-                    if value['status']=='submitting': server.auto_execution.request_cancel(key)
-                    return original(key,value)
-                with patch.object(server.bridge,'update',side_effect=raced), self.assertRaises(BridgeError):
+                def raced(value):
+                    from budget_policy import unset_policy
+                    server.bridge._budget_policy=unset_policy()
+                with patch.object(gateway,'check_ready',side_effect=raced), self.assertRaises(BridgeError):
                     server.flow.approve('one',job['quoteId'],job['pointsEstimate'])
                 self.assertNotIn('paid-submit',gateway.calls)
             finally: server.server_close()
@@ -232,10 +234,10 @@ class WorkbenchQueueTests(unittest.TestCase):
                 first=server.submit(request(),'one'); self.assertTrue(entered.wait(2))
                 second=server.submit(request(),'two')
                 self.assertEqual(server.bridge.get(second)['status'],'preparation_queued')
-                server.auto_execution.cancel(second)
+                with self.assertRaises(BridgeError): server.auto_execution.cancel(second)
                 release.set(); server.wait_for_jobs()
-                self.assertEqual(server.bridge.get(second)['status'],'cancelled')
-                self.assertEqual(server.bridge.gateway.calls.count('upload'),1)
+                self.assertEqual(server.bridge.get(second)['status'],'prepared')
+                self.assertEqual(server.bridge.gateway.calls.count('upload'),2)
             finally: release.set(); server.server_close()
 
     def test_public_tasks_are_canvas_filtered_and_never_contain_internal_payload(self):
@@ -279,7 +281,7 @@ class WorkbenchCatalogTests(unittest.TestCase):
                 return {'video':video+[row],'image':json.loads((Path(__file__).parents[1]/'image-catalog.json').read_text('utf-8'))['items'],
                         'extension':json.loads((Path(__file__).parents[1]/'extension-catalog.json').read_text('utf-8'))['items']}
         import model_catalog,image_flow,extension
-        with patch.object(model_catalog,'LIVE_ITEMS',None),patch.object(image_flow,'LIVE_ITEMS',None,create=True),patch.object(extension,'LIVE_ITEMS',None,create=True):
+        with patch.object(model_catalog,'LIVE_ITEMS',None),patch('dreama_image.LIVE_ITEMS',None),patch('dreama_compat.extension.LIVE_ITEMS',None):
             result=integration.catalog(gateway=CatalogGateway())
             profile=next(p for p in result['channels'][0]['modelProfiles'] if p['model']=='50347e68-2b4c-49da-8c45-426432bba793')
             variant=profile['capabilityConfig']['video']['resolutionVariants']['1080p']

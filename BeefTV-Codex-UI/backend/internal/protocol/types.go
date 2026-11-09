@@ -152,6 +152,7 @@ type Result struct {
 	Text      string           `json:"text,omitempty"`
 	Reasoning string           `json:"reasoning,omitempty"`
 	Usage     map[string]any   `json:"usage,omitempty"`
+	Artifacts []MediaArtifact  `json:"artifacts,omitempty"`
 }
 
 type Parameter struct {
@@ -206,6 +207,7 @@ type Manifest struct {
 	Agent           *ManifestOperation     `json:"-"`
 	Poll            *ManifestOperation     `json:"-"`
 	Cancel          *ManifestOperation     `json:"-"`
+	Ack             *ManifestOperation     `json:"-"`
 	ResultOperation *ManifestOperation     `json:"-"`
 	Response        ManifestResponse       `json:"-"`
 	AgentResponse   *ManifestAgentResponse `json:"-"`
@@ -318,6 +320,7 @@ type ManifestProvider struct {
 	Agent                   *ManifestOperation     `json:"agent,omitempty"`
 	Poll                    *ManifestOperation     `json:"poll,omitempty"`
 	Cancel                  *ManifestOperation     `json:"cancel,omitempty"`
+	Ack                     *ManifestOperation     `json:"ack,omitempty"`
 	Result                  *ManifestOperation     `json:"result,omitempty"`
 	Response                ManifestResponse       `json:"response"`
 	AgentResponse           *ManifestAgentResponse `json:"agentResponse,omitempty"`

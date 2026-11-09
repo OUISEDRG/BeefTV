@@ -20,11 +20,11 @@ import { navigateToSettings } from "@/lib/settings-navigation";
 import { modelGroupReferenceLimits, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { referencedAssetIdsInPrompt } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
-import { skillRuntime, resolveSkillMentions } from "@/services/skill-runtime";
+import { skillRuntime } from "@/services/skill-runtime";
 import { loadWorkspaceAssetsForUse } from "@/services/workspace-asset-read";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 import { findGenerationTaskByOperation, queryGenerationTask, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
-import { useConfigStore, useEffectiveConfig, resolveModelRequestConfig } from "@/stores/use-config-store";
+import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { seedanceReferenceRatioWarning } from "@/lib/seedance-channel-warning";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
@@ -37,14 +37,9 @@ import { canvasNodeHasPendingOutcomeResult, isNodeRegenerateBlocked, isNodeRegen
 import { createReferenceLinkResolver } from "@/components/generation-reference-links";
 import { confirmCanvasGeneration, waitForCanvasPreparation } from "./canvas-generation-preflight";
 import { startOperation } from "@/stores/use-operation-progress";
-import { prepareDreamaAudioIdentity, prepareDreamaVoiceProviderOptions } from "@/lib/canvas/dreama-voice-generation";
-import { resolveDreamaVoiceSample } from "@/services/dreama-voice-sample";
-import { assertDreamaReferences, buildDreamaGenerationPreview, dreamaCanvasVideoConfig, freezeDreamaBinding, isDreamaProtocol, mergeDreamaProviderOptions } from "@/lib/canvas/dreama-workbench";
+import { captureCanvasGenerationProvider } from "@/lib/canvas/canvas-generation-provider";
 import { generationPromptRequired } from "@/lib/generation-prompt";
 import { declaredGenerationConfigError } from "@/lib/declared-generation-config";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
-import { assertImageToolGeneration, dreamaImageToolPromptError } from "@/lib/canvas/image-tool-generation";
-import { dreamaImageToolSupport } from "@/lib/canvas/dreama-image-tool-support";
 import type { CanvasPageUiStoreHook } from "@/stores/canvas/use-canvas-page-ui-store";
 
 type UseCanvasGenerationExecutorOptions = {
@@ -121,7 +116,7 @@ export function useCanvasGenerationExecutor({
         (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => {
             // Capture routing and authored inputs before the submission lock's async queue.
             const submittedInputs = structuredClone(options?.confirmedInputs ?? { nodes: nodesRef.current, connections: connectionsRef.current, config: effectiveConfig, assets, skills: addedSkills });
-            const canvasBinding = structuredClone(useCanvasStore.getState().openProject(projectId)?.integrations?.dreama);
+            const provider = captureCanvasGenerationProvider(projectId, mode);
             return runCanvasGenerationSubmissionOnce(
                 submissionLocksRef.current,
                 nodeId,
@@ -168,11 +163,10 @@ export function useCanvasGenerationExecutor({
                         const inputSkills = frozen.skills;
                         const sourceNode = inputNodes.find((node) => node.id === nodeId);
                         const validateConfig = (config: ReturnType<typeof buildConfirmedGenerationConfig>) => {
-                            const scoped = mode === "video" ? dreamaCanvasVideoConfig(config, canvasBinding, sourceNode?.metadata?.size) : { config, error: "" };
-                            if (scoped.error) throw new Error(scoped.error);
-                            const parameterError = declaredGenerationConfigError(scoped.config, mode);
+                            const scoped = provider.scopeConfig(config, sourceNode);
+                            const parameterError = declaredGenerationConfigError(scoped, mode);
                             if (parameterError) throw new Error(parameterError);
-                            return scoped.config;
+                            return scoped;
                         };
                         const pendingSubmissions = nodesRef.current.filter((node) => (node.id === nodeId || node.metadata?.generatedFromNodeId === nodeId) && ["submitting", "unknown"].includes(node.metadata?.generationSubmissionState || ""));
                         if (pendingSubmissions.length && !options?.previewOnly) {
@@ -259,22 +253,9 @@ export function useCanvasGenerationExecutor({
                             navigateToSettings({ continueCreation: true });
                             return;
                         }
-                        const dreamaBinding = mode !== "text" && isDreamaProtocol(resolveModelRequestConfig(generationConfig, generationConfig.model).interfaceType)
-                            ? freezeDreamaBinding(canvasBinding, projectId, nodeId, inputNodes) : undefined;
-                        if (dreamaBinding && mode === "video") inputConfig = { ...inputConfig, channels: generationConfig.channels, size: generationConfig.size };
-                        if (dreamaBinding && mode === "image" && sourceNode) {
-                            const toolPromptError = dreamaImageToolPromptError(sourceNode);
-                            if (toolPromptError) throw new Error(toolPromptError);
-                            const toolKind = sourceNode.metadata?.emotionEdit ? "emotion" : sourceNode.metadata?.imageTool?.kind;
-                            if (toolKind) {
-                                const support = dreamaImageToolSupport(toolKind, sourceNode, generationConfig, { id: projectId, integrations: { dreama: canvasBinding }, nodes: inputNodes }, "generation");
-                                if (support?.disabled) throw new Error(support.reason);
-                            }
-                            assertImageToolGeneration(sourceNode, inputNodes, inputConnections, prompt);
-                        }
-                        if (dreamaBinding && (sourceNode?.metadata?.cameraControl?.enabled || resolveSkillMentions(prompt, inputSkills).length)) {
-                            throw new Error("剧梦生成只转换引用标记，不自动添加摄影、肖像或技能正文。请将所需内容写入提示词，并关闭对应设置或移除技能引用后生成。");
-                        }
+                        const providerPlan = provider.plan(generationConfig, nodeId, sourceNode, inputNodes, inputConnections, prompt, inputSkills);
+                        const referenceOnly = providerPlan?.referenceOnly ?? false;
+                        if (providerPlan) inputConfig = providerPlan.constrainModelConfig(inputConfig);
 
                         const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
                         const editingTextNode = mode === "text" && Boolean(sourceTextContent);
@@ -301,7 +282,7 @@ export function useCanvasGenerationExecutor({
                         // 模型视频接口才把提示词视为纯文本输入。
                         const usesWorkflowProvider = Boolean(mode !== "text" && generationConfig.taskWorkflowProvider && generationConfig.taskWorkflowProvider !== "model");
                         // 普通视频协议只保留输入框文本（显式 @文本 引用仍会展开为真实内容）；声明式工作流还要保留连接媒体。
-                        const promptOnly = Boolean(dreamaBinding) || mode === "video" && !usesWorkflowProvider;
+                        const promptOnly = referenceOnly || mode === "video" && !usesWorkflowProvider;
                         try {
                             // 素材库列表按需加载，显式引用不能仅凭是否出现在列表中判断失效。
                             const missingAssetIds = referencedAssetIdsInPrompt(generationPrompt).filter((id) => !inputAssets.some((asset) => asset.id === id));
@@ -310,15 +291,15 @@ export function useCanvasGenerationExecutor({
                                 const loaded = useAssetStore.getState().assets.filter((asset) => missingAssetIds.includes(asset.id));
                                 inputAssets = [...inputAssets, ...structuredClone(loaded)];
                             }
-                            const baseContext = prepareDreamaAudioIdentity(buildNodeGenerationContext(
+                            const baseContext = provider.prepareContext(buildNodeGenerationContext(
                                 nodeId,
                                 inputNodes,
                                 inputConnections,
                                 editingTextNode ? buildTextRewritePrompt(sourceTextContent, prompt) : generationPrompt,
                                 inputAssets,
                                 promptOnly,
-                                { preserveMediaBindings: mode === "video" || Boolean(dreamaBinding), preservePromptText: Boolean(dreamaBinding), referenceOnly: Boolean(dreamaBinding) },
-                            ), mode);
+                                { preserveMediaBindings: mode === "video" || referenceOnly, preservePromptText: referenceOnly, referenceOnly },
+                            ));
                             const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig, true);
                             if (requirements?.input) {
                                 const { imageCount = 0, videoCount = 0, audioCount = 0, characterCount = 0 } = requirements.input;
@@ -327,7 +308,7 @@ export function useCanvasGenerationExecutor({
                             generationConfig = validateConfig(buildConfirmedGenerationConfig(inputConfig, sourceNode, mode, requirements, options?.confirmedModelKey));
                             selectedModel = generationConfig.model;
                             const referenceLimits = usesWorkflowProvider ? undefined : modelGroupReferenceLimits(inputConfig, generationConfig.model, mode, requirements);
-                            rawGenerationContext = await waitForCanvasPreparation(() => hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits, Boolean(dreamaBinding)), controller.signal);
+                            rawGenerationContext = await waitForCanvasPreparation(() => hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits, referenceOnly), controller.signal);
                             const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig);
                             if (hydratedRequirements?.input) {
                                 const { imageCount = 0, videoCount = 0, audioCount = 0, characterCount = 0 } = hydratedRequirements.input;
@@ -344,20 +325,19 @@ export function useCanvasGenerationExecutor({
                         stage = "skills";
                         diagnostic("generation_preflight_stage");
                         try {
-                            if (dreamaBinding && resolveSkillMentions(rawGenerationContext.prompt, inputSkills).length) throw new Error("剧梦生成不自动添加技能正文。请将所需内容写入提示词，并移除技能引用后生成。");
-                            skillExecution = await waitForCanvasPreparation(() => skillRuntime.prepare({ profile: "canvas", prompt: rawGenerationContext.prompt, skills: dreamaBinding ? [] : inputSkills }), controller.signal);
+                            providerPlan?.validateSkills(rawGenerationContext.prompt);
+                            skillExecution = await waitForCanvasPreparation(() => skillRuntime.prepare({ profile: "canvas", prompt: rawGenerationContext.prompt, skills: referenceOnly ? [] : inputSkills }), controller.signal);
                         } catch (error) {
                             reportError(error);
                             return;
                         }
-                        const hasDreamaVoiceBinding = Boolean(rawGenerationContext.dreamaAudioVoiceBinding || rawGenerationContext.referenceImages.some(image => image.dreamaVoiceBinding));
-                        let effectivePrompt = dreamaBinding || hasDreamaVoiceBinding ? skillExecution.prompt : skillExecution.prompt.trim();
-                        if (mode === "video" || dreamaBinding) {
-                            rawGenerationContext = compileNodeGenerationReferences({ ...rawGenerationContext, prompt: effectivePrompt }, generationConfig, mode === "video" ? buildVideoGenerationMetadata(sourceNode, rawGenerationContext, generationConfig).videoEditOperation : undefined, { referenceOnly: Boolean(dreamaBinding) });
+                        let effectivePrompt = referenceOnly || provider.hasBoundVoice(rawGenerationContext) ? skillExecution.prompt : skillExecution.prompt.trim();
+                        if (mode === "video" || referenceOnly) {
+                            rawGenerationContext = compileNodeGenerationReferences({ ...rawGenerationContext, prompt: effectivePrompt }, generationConfig, mode === "video" ? buildVideoGenerationMetadata(sourceNode, rawGenerationContext, generationConfig).videoEditOperation : undefined, { referenceOnly });
                             effectivePrompt = rawGenerationContext.prompt;
                         }
                         stage = "parameters";
-                        if (dreamaBinding) assertDreamaReferences(rawGenerationContext,
+                        providerPlan?.validateReferences(rawGenerationContext,
                             modelGroupReferenceLimits(generationConfig, generationConfig.model, mode, generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig)),
                             mode === "video" ? buildVideoGenerationMetadata(sourceNode, rawGenerationContext, generationConfig).videoEditOperation : mode === "image" ? "image" : undefined);
                         let styleMetadata = {};
@@ -365,7 +345,7 @@ export function useCanvasGenerationExecutor({
                             try {
                                 const styleRuntime = resolveCanvasStyleExecution(inputNodes, sourceNode, effectivePrompt, generationConfig, mode);
                                 if (styleRuntime) {
-                                    if (dreamaBinding) throw new Error("剧梦生成不自动添加项目画风正文。请将所需风格写入提示词，并停用对应项目画风后生成。");
+                                    providerPlan?.validateStyle();
                                     effectivePrompt = styleRuntime.prompt;
                                     styleMetadata = { styleProfileJson: styleRuntime.profileJson, styleExecutionPlan: styleRuntime.plan };
                                 }
@@ -375,21 +355,15 @@ export function useCanvasGenerationExecutor({
                             }
                         }
                         try {
-                            rawGenerationContext = {
-                                ...rawGenerationContext,
-                                dreamaVoiceProviderOptions: await waitForCanvasPreparation(
-                                    () => prepareDreamaVoiceProviderOptions(rawGenerationContext, generationConfig, mode, id => resolveDreamaVoiceSample(id, controller.signal)),
-                                    controller.signal,
-                                ),
-                            };
+                            rawGenerationContext = await waitForCanvasPreparation(
+                                () => provider.prepareProviderContext(rawGenerationContext, generationConfig, controller.signal, providerPlan?.mergeOptions),
+                                controller.signal,
+                            );
                         } catch (error) {
                             reportError(error);
                             return;
                         }
                         const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
-                        if (dreamaBinding) {
-                            generationContext.dreamaVoiceProviderOptions = mergeDreamaProviderOptions(dreamaBinding, generationContext.dreamaVoiceProviderOptions);
-                        }
                         if (!options?.previewOnly && isNodeRegenerateConfirm(sourceNode?.metadata) && modal?.confirm) {
                             const copy = taskOutcomeCopy(readNodeTaskOutcome(sourceNode?.metadata));
                             stage = "duplicate_confirmation";
@@ -423,18 +397,18 @@ export function useCanvasGenerationExecutor({
                             }
                             generationConfig = { ...generationConfig, audioVoice: voice.voiceKey, audioInstructions: [voice.instructions, generationConfig.audioInstructions].filter(Boolean).join("；") };
                         }
-                        if (!effectivePrompt.trim() && generationPromptRequired(generationConfig, mode) && (dreamaBinding || mode === "text" || mode === "audio")) {
+                        if (!effectivePrompt.trim() && generationPromptRequired(generationConfig, mode) && (referenceOnly || mode === "text" || mode === "audio")) {
                             reportError(new Error("请输入生成内容"));
                             return;
                         }
-                        const finalParameterError = declaredGenerationConfigError(generationConfig, mode, { requireVoice: true, hasVoiceSource: Boolean(generationContext.dreamaAudioVoiceBinding || generationContext.resolvedCharacterVoices.length || generationContext.referenceAudios.length) });
+                        const finalParameterError = declaredGenerationConfigError(generationConfig, mode, { requireVoice: true, hasVoiceSource: provider.hasVoiceSource(generationContext) });
                         if (finalParameterError) throw new Error(finalParameterError);
-                        if (dreamaBinding) {
-                            const preview = buildDreamaGenerationPreview(dreamaBinding, generationConfig.model, mode, modelRequestOptions(generationConfig, mode), generationContext);
-                            setNodes(current => current.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, dreamaGenerationPreview: preview } } : node));
+                        if (providerPlan) {
+                            const preview = providerPlan.previewMetadata(generationConfig, generationContext);
+                            setNodes(current => current.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...preview } } : node));
                         }
                         if (options?.previewOnly) {
-                            if (!dreamaBinding) throw new Error("预览仅适用于已绑定项目的剧梦生成模型");
+                            if (!providerPlan) throw new Error("当前生成渠道没有可用的预检预览");
                             return;
                         }
 

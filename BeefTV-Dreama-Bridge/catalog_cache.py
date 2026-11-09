@@ -44,9 +44,11 @@ def prepare(snapshots):
 
 
 def apply(snapshots):
-    import model_catalog,image_flow,extension
+    import dreama_image
+    import model_catalog
+    from dreama_compat import extension
     model_catalog.LIVE_ITEMS=snapshots['video']
-    image_flow.LIVE_ITEMS=snapshots['image']
+    dreama_image.LIVE_ITEMS=snapshots['image']
     extension.LIVE_ITEMS=snapshots['extension']
 
 

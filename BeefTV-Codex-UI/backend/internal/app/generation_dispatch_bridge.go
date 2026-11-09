@@ -42,7 +42,7 @@ func decodeProviderDataURL(value string) (string, []byte, error) {
 }
 
 func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, taskID string) (map[string]interface{}, string, error) {
-	return generation.QueryProtocolAdapterVideoTask(ctx, input, adapter, taskID)
+	return generation.QueryProtocolAdapterTask(ctx, input, adapter, taskID)
 }
 
 func validateGenerationInterface(mode string, interfaceType string) error {

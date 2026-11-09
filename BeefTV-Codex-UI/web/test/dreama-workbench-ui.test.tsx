@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DreamaSnapshotPreview, DreamaTaskRow } from "../src/pages/canvas/dreama-workbench";
-import { dreamaTaskPresentation } from "../src/lib/canvas/dreama-workbench";
 
 test("snapshot preview exposes final slots, voices and readable parameters without a confirmation", () => {
     const html = renderToStaticMarkup(<DreamaSnapshotPreview onFocus={() => {}} preview={{
@@ -17,29 +16,28 @@ test("snapshot preview exposes final slots, voices and readable parameters witho
     expect(html).not.toContain("确认生成");
 });
 
-test("task cancel control follows the bridge cancelable fact even after submission", () => {
-    const task = { id: "job", kind: "video", status: "submitted", cancelable: false, projectId: 41, seriesId: 12, canvasId: "c", nodeId: "n", pointsEstimate: 9 };
-    expect(renderToStaticMarkup(<DreamaTaskRow task={task} busy={false} onOpen={() => {}} onCancel={() => {}} />)).not.toContain("取消");
-    const pending = renderToStaticMarkup(<DreamaTaskRow task={{ ...task, status: "preparing", cancelable: true }} busy={false} onOpen={() => {}} onCancel={() => {}} />);
-    expect(pending).toContain("取消");
-    expect(pending).toContain("准备中");
-    expect(pending).toContain("预计 9 积分");
+test("ordinary generation and historical countdown records belong to the native task center", () => {
+    const task = { id: "job", kind: "video", cancelable: true, autoExecuteAt: Date.now() + 5000, projectId: 41, seriesId: 12, canvasId: "c", nodeId: "n", pointsEstimate: 9 };
+    for (const status of ["preparing", "prepared", "countdown", "queued", "processing", "submitted", "completed", "cancelled"]) {
+        expect(renderToStaticMarkup(<DreamaTaskRow task={{ ...task, status }} onOpen={() => {}} />)).toBe("");
+    }
 });
 
-test("public bridge task status controls terminal labels and all pending or recovery counts", () => {
+test("workbench displays preflight and recovery exceptions without generation controls", () => {
     const base = { id: "job", kind: "video", cancelable: false, projectId: 41, seriesId: 12, canvasId: "c", nodeId: "n" };
-    for (const [status, stage, label, pending] of [
-        ["completed", "complete", "已完成", false], ["failed", "terminal", "失败", false], ["cancelled", "cancelled_before_submit", "已取消", false],
-        ["prepared", "complete", "等待执行", true], ["queued", "poll", "排队中", true], ["processing", "poll", "生成中", true],
-        ["submitting", "submit", "提交中", true], ["preparing", "reference:1", "准备中", true],
-        ["submission_unknown", "submit", "提交结果待核对", true], ["download_failed", "save", "结果待取回", true],
-        ["binding_verification_required", "terminal", "项目归属待核验", true],
+    const exactQuote = "1.000000000000000000000000001";
+    for (const [status, stage, label] of [
+        ["prepared", "budget_blocked", "预算待配置或不足"],
+        ["submission_unknown", "submit", "提交结果待核对"], ["download_failed", "save", "结果待取回"],
+        ["binding_verification_required", "terminal", "项目归属待核验"],
     ] as const) {
-        const task = { ...base, status, stage };
-        expect(dreamaTaskPresentation(task)).toMatchObject({ label, pending });
-        const html = renderToStaticMarkup(<DreamaTaskRow task={task} busy={false} onOpen={() => {}} onCancel={() => {}} />);
+        const task = { ...base, status, stage, pointsEstimate: exactQuote, cancelable: true, autoExecuteAt: Date.now() + 5000 };
+        const html = renderToStaticMarkup(<DreamaTaskRow task={task} onOpen={() => {}} />);
         expect(html).toContain(label);
+        expect(html).toContain(exactQuote);
+        expect(html).not.toContain("取消");
+        expect(html).not.toContain("秒后执行");
+        expect(html).not.toContain("立即执行");
         expect(html).not.toContain(`>${stage}<`);
     }
-    expect(dreamaTaskPresentation({ ...base, status: "preparing", stage: "reference:1" }).detail).toBe("准备第 1 项参考素材");
 });

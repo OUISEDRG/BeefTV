@@ -44,6 +44,7 @@ export type DesktopRuntimeBinding = {
 	CleanupPreviousStorage?: () => Promise<DesktopStorageUsage>;
     RuntimeConfig: () => Promise<DesktopRuntimeConfig>;
     SaveOwnedMedia?: (fileName: string, resourceID: string) => Promise<boolean>;
+    SaveOwnedMediaBatch?: (entries: Array<{ name: string; resourceId: string }>) => Promise<{ cancelled: boolean; downloaded: number; failed: number }>;
     SaveOwnedArtifact?: (fileName: string, data: string) => Promise<boolean>;
     SaveOwnedArchive?: (fileName: string, entries: Array<{ name: string; resourceId?: string; data?: string }>) => Promise<boolean>;
     UpdateStatus?: () => Promise<DesktopUpdateState>;

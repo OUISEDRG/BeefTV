@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"infinite-canvas/backend/internal/generation"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/generation"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/repository"
 )
 
@@ -88,6 +89,7 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 	requestTask := *task
 	requestTask.InputJSON = mustJSON(input)
 	requestCtx = withProviderRequestKind(withProviderAnalytics(requestCtx, s, requestTask), "cancel")
+	requestCtx = withProtocolRegistry(requestCtx, s.protocolRegistry())
 	if err := cancelProviderTask(requestCtx, input.Config, task.ProviderRequestID); err != nil {
 		return s.markProviderCancellationUncertain(task, providerCancellationUncertainMessage("上游取消请求结果不明确")+"："+safeProviderLogError(err))
 	}
@@ -106,6 +108,7 @@ func (s *Service) reconcileProviderCancellation(ctx context.Context, task *model
 	queryTask := *task
 	queryTask.InputJSON = mustJSON(input)
 	queryCtx := withProviderRequestKind(withProviderAnalytics(ctx, s, queryTask), "cancel-query")
+	queryCtx = withProtocolRegistry(queryCtx, s.protocolRegistry())
 	outcome, providerStatus, err := queryProviderCancellation(queryCtx, input.Config, task.ProviderRequestID)
 	if err != nil {
 		if task.ProviderCancelAttempts >= providerCancellationMaxAttempts-1 {
@@ -177,7 +180,7 @@ func (s *Service) providerCancellationInput(task *model.Task) (canvasGenerationI
 }
 
 func supportsProviderCancellation(interfaceType string) bool {
-	return interfaceType == string(model.ChannelInterfaceGeminiVeo) || model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(interfaceType))
+	return interfaceType == "codex-image" || interfaceType == string(model.ChannelInterfaceGeminiVeo) || model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(interfaceType))
 }
 
 func cancelProviderTask(ctx context.Context, config providerConfig, providerRequestID string) error {
@@ -185,6 +188,17 @@ func cancelProviderTask(ctx context.Context, config providerConfig, providerRequ
 		return generation.CancelUpscale(ctx, config, providerRequestID)
 	}
 	switch {
+	case config.InterfaceType == "codex-image":
+		adapter, poll, err := codexImageCancellationProtocol(ctx, config, providerRequestID)
+		if err != nil {
+			return err
+		}
+		spec, err := adapter.BuildCancel(ctx, poll)
+		if err != nil {
+			return err
+		}
+		_, _, err = generation.ExecuteProtocolBinaryRequest(ctx, config, spec)
+		return err
 	case config.InterfaceType == string(model.ChannelInterfaceGeminiVeo):
 		path := "/" + strings.TrimLeft(providerRequestID, "/") + ":cancel"
 		return postGeminiJSON(ctx, config, path, map[string]any{}, &map[string]any{})
@@ -194,6 +208,14 @@ func cancelProviderTask(ctx context.Context, config providerConfig, providerRequ
 	default:
 		return errors.New("当前上游协议不支持取消")
 	}
+}
+
+func codexImageCancellationProtocol(ctx context.Context, config providerConfig, id string) (protocol.Adapter, protocol.PollContext, error) {
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !ok || !adapter.Metadata().Enabled {
+		return nil, protocol.PollContext{}, errors.New("Codex 图片插件未启用")
+	}
+	return adapter, protocol.PollContext{BaseURL: config.BaseURL, Model: config.Model, TaskID: id}, nil
 }
 
 func deleteProviderTask(ctx context.Context, config providerConfig, path string) error {
@@ -231,6 +253,39 @@ func queryProviderCancellation(ctx context.Context, config providerConfig, provi
 		}
 	}
 	switch {
+	case config.InterfaceType == "codex-image":
+		adapter, poll, err := codexImageCancellationProtocol(ctx, config, providerRequestID)
+		if err != nil {
+			return "", "", err
+		}
+		spec, err := adapter.BuildPoll(ctx, poll)
+		if err != nil {
+			return "", "", err
+		}
+		body, err := generation.ExecuteProtocolRequest(ctx, config, spec)
+		if err != nil {
+			return "", "", err
+		}
+		// ParsePoll otherwise falls back to the requested ID for a missing receipt.
+		poll.TaskID = ""
+		state, err := adapter.ParsePoll(ctx, poll, body)
+		if err != nil {
+			return "", "", err
+		}
+		if state.TaskID != providerRequestID {
+			return "", "", errors.New("Codex 图片取消回执与原任务不匹配")
+		}
+		status := string(state.Status)
+		switch state.Status {
+		case protocol.StatusCancelled:
+			return providerCancellationConfirmed, status, nil
+		case protocol.StatusSucceeded:
+			return providerCancellationSucceeded, status, nil
+		case protocol.StatusFailed:
+			return providerCancellationFailed, status, nil
+		default:
+			return providerCancellationPending, status, nil
+		}
 	case config.InterfaceType == string(model.ChannelInterfaceGeminiVeo):
 		// Gemini 用 operation.error 表示取消终态，此处必须保留该字段再判断，
 		// 不能让通用 JSON 解包提前把它转换成请求失败。

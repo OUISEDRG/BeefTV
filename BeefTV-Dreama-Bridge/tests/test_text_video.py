@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from bridge import Bridge, BridgeError, DreamaGateway, validate_request
+from tests.fixtures_budget import FundedBridge as Bridge
 from install_channel import channel
 from tests.test_bridge import FakeGateway, request
 
@@ -62,7 +63,7 @@ class TextVideoTests(unittest.TestCase):
         prompt='海面 <微波> & 光线\n镜头缓慢推进。'
         saved_html='<p>海面 &lt;微波&gt; &amp; 光线<br>镜头缓慢推进。</p>'
         gateway=DreamaGateway()
-        responses=[{}, {'items':[{'id':300}]}, {'items':[{'id':300,'videoPrompt':saved_html}]}]
+        responses=[{}, {'items':[{'id':300}]}, {}, {'items':[{'id':300,'videoPrompt':saved_html}]}]
         def response(*args):
             if args[:2]==('prompt','assemble'):
                 raise BridgeError('Dreama 1.0.5 requires --ref for prompt assemble')
@@ -73,7 +74,10 @@ class TextVideoTests(unittest.TestCase):
             args=cli.call_args_list[0].args
             self.assertEqual(args[:2],('storyboard','create'))
             self.assertNotIn('--prompt',args)
-            self.assertEqual(save.call_args.args[1]['videoPrompt'],saved_html)
+            update=cli.call_args_list[2].args
+            self.assertEqual(update[:2],('storyboard','update'))
+            self.assertEqual(update[update.index('--video-prompt')+1],saved_html)
+            save.assert_not_called()
             self.assertNotIn('--ref',args)
             self.assertEqual(saved['referenceImageIds'],[])
             self.assertTrue(saved['promptVerified'])

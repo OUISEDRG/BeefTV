@@ -28,6 +28,7 @@ type Task struct {
 	RouteRun                  int                     `json:"-" gorm:"index"`
 	ProviderRequestID         string                  `json:"providerRequestId,omitempty" gorm:"index;size:160"`
 	ProviderCancelStatus      ProviderCancelStatus    `json:"providerCancelStatus,omitempty" gorm:"index;size:24;index:idx_tasks_provider_cancel,priority:2"`
+	CancelUnsupported         bool                    `json:"generationCancelUnsupported,omitempty" gorm:"-"`
 	ProviderCancelError       string                  `json:"providerCancelError,omitempty" gorm:"type:text"`
 	ProviderCancelAttempts    int                     `json:"providerCancelAttempts,omitempty"`
 	ProviderCancelRequestedAt *time.Time              `json:"providerCancelRequestedAt,omitempty"`

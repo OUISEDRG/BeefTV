@@ -29,6 +29,7 @@ describe("native media save", () => {
         expect(ownedResourceIdFromMediaRef(undefined, "http://127.0.0.1:43123/api/resources/abc123/file")).toBe("abc123");
         expect(ownedResourceIdFromMediaRef(undefined, "/api/resources/abc123/file")).toBe("abc123");
         expect(ownedResourceIdFromMediaRef(undefined, "https://cdn.example.com/api/resources/abc123/file")).toBe("");
+        expect(ownedResourceIdFromMediaRef(undefined, "//cdn.example.com/api/resources/abc123/file")).toBe("");
         expect(ownedResourceIdFromMediaRef(undefined, "data:video/mp4;base64,AAAA")).toBe("");
         expect(ownedResourceIdFromMediaRef(undefined, "blob:http://127.0.0.1:3000/abc")).toBe("");
     });

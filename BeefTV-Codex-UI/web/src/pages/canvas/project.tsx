@@ -1929,6 +1929,8 @@ function InfiniteCanvasPage() {
                         <CanvasProjectContextMenu
                             menu={contextMenu}
                             node={contextMenuNode}
+                            nodes={nodes}
+                            selectedNodeIds={selectedNodeIds}
                             workspaceMode={workspaceMode}
                             isProjectLinked={Boolean(currentProject?.projectId)}
                             canUndo={historyState.canUndo}

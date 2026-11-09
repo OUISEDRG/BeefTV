@@ -51,6 +51,10 @@ class Generation:
 
     def valid_task_id(self,value): return type(value) is int and value>0
     def reconcile_task_id(self,job): return self.gateway.inspect_board(job).get('videoTaskId')
+    def recover_task_id(self,job):
+        record=self.bridge.tasks.get(job['id'])
+        known=record['identity'].get('upstreamTaskId') if record else None
+        return known if self.valid_task_id(known) else self.reconcile_task_id(job)
     def query_task_status(self,job): return self.gateway.task_status(job['taskId'])
     def check_ready(self,job): self.gateway.check_ready(job)
     def estimate_job(self,job): return self.gateway.estimate(job['duration'],job['model'])
@@ -58,64 +62,33 @@ class Generation:
 
     @job_scope
     def approve(self,key,quote_id,points,*,before_submit=None):
-        # The lock spans validation, durable intent and the single CLI invocation.
-        # No generic CLI entry accepts `video produce`.
-        with self.bridge.lock:
-            job=self.bridge.get(key)
-            if not job or job.get('status')!='prepared' or not job.get('quoteId') or job['quoteId']!=quote_id:
-                raise BridgeError('任务不在待确认状态或报价已失效。')
-            if type(points) not in (int,float) or not math.isfinite(points) or points!=job['pointsEstimate']:
-                raise BridgeError('确认积分与当前报价不一致。')
-            self.bridge.ensure_not_cancelled(key)
-            if before_submit: before_submit()
-            self.check_ready(job)
-            fresh=self.estimate_job(job)
-            if type(fresh) not in (int,float) or not math.isfinite(fresh) or fresh<0:
-                raise BridgeError('无法取得当前积分。')
-            if fresh!=points:
-                job.update(pointsEstimate=fresh,quoteId=uuid.uuid4().hex)
-                self.bridge.update(key,job)
-                raise BridgeError('积分已变化，请重新确认。')
-            self.bridge.ensure_not_cancelled(key)
-            if before_submit: before_submit()
-            job.update(status='submitting',stage='submit',approvedAt=time.time(),approvedPoints=points,
-                       generationSubmitted=None)
-            self.bridge.update(key,job)
-            try:
-                receipt=self.gateway.submit_video(job)
-                task_id=receipt.get('taskId') if isinstance(receipt,dict) else receipt
-                if not self.valid_task_id(task_id):
-                    task_id=self.reconcile_task_id(job)
-                if not self.valid_task_id(task_id): raise BridgeError('提交回执未得到唯一任务ID。')
-                job.update(taskId=task_id,status='queued',stage='poll',generationSubmitted=True)
-                self.bridge.update(key,job)
-                return job
-            except Exception as error:
-                detail=str(error) if isinstance(error,BridgeError) else type(error).__name__
-                job.update(status='submission_unknown',error=detail,submissionError=detail)
-                self.bridge.update(key,job)
-                raise BridgeError('提交回执不明，正在只读对账；不会自动再次扣费。') from None
+        # Compatibility endpoint; all paths still pass through the same budget gate.
+        from submission import SubmissionService
+        return SubmissionService(self).execute(key,before_submit=before_submit,expected_quote=quote_id,expected_points=points)
+
+    @job_scope
+    def submit(self,key,*,before_submit=None):
+        from submission import SubmissionService
+        return SubmissionService(self).execute(key,before_submit=before_submit)
 
     def cancel(self,key):
-        with self.bridge.lock:
-            job=self.bridge.get(key)
-            if not job or job['status']!='prepared': raise BridgeError('只能取消尚未确认的本地任务。')
-            job.update(status='cancelled',stage='cancelled_before_submit')
-            self.bridge.update(key,job)
+        raise BridgeError('Dreama 新执行合同不支持预提交取消。')
 
     @job_scope
     def poll(self,key):
-        with self.bridge.lock:
+        with self.bridge.task_lock(key):
             job=self.bridge.get(key)
             if not job or job['status'] not in POLLABLE: return job
             job['lastPollAt']=time.time()
             try:
                 if job['status'] in ('submitting','submission_unknown'):
                     # Dedicated board, exact project/series/prompt checked by gateway.
-                    task_id=self.reconcile_task_id(job)
+                    task_id=self.recover_task_id(job)
                     if not self.valid_task_id(task_id):
+                        self.bridge.tasks.mark_unknown(key)
                         job.update(status='submission_unknown',error='尚未查到对应任务ID；需对账，不自动重提。')
                         self.bridge.update(key,job); return job
+                    self.bridge.tasks.record_receipt(key,task_id)
                     job.update(taskId=task_id,status='queued',stage='poll',generationSubmitted=True)
                     job.pop('error',None)
                     self.bridge.update(key,job)

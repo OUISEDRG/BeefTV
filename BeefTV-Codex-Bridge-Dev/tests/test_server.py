@@ -14,7 +14,7 @@ class HttpTests(unittest.TestCase):
     def setUp(self):
         self.calls=[]
         def factory(): self.calls.append(1); return FakeRPC([delta('测试文字'),done()])
-        self.bridge=CompletionBridge(factory,['gpt-6-astra'])
+        self.bridge=CompletionBridge(factory,['gpt-6-astra'],authorize_submission=lambda: None)
         self.http=create_server(self.bridge,'secret-for-test',port=0)
         self.thread=threading.Thread(target=self.http.serve_forever,daemon=True); self.thread.start()
         self.url='http://127.0.0.1:'+str(self.http.server_port)
@@ -28,6 +28,19 @@ class HttpTests(unittest.TestCase):
         with self.request('/health',auth=False) as r: self.assertEqual(json.load(r)['service'],'beeftv-codex')
         with self.request('/v1/models') as r: self.assertEqual(json.load(r)['data'][0]['id'],'gpt-6-astra')
         self.assertEqual(self.calls,[])
+    def test_null_budget_blocks_both_text_http_modes_before_rpc(self):
+        self.bridge.authorize_submission = None
+        for stream in (False, True):
+            with self.subTest(stream=stream):
+                data={'model':'gpt-6-astra','stream':stream,'messages':[{'role':'user','content':'fixture'}]}
+                with self.assertRaises(HTTPError) as denied:
+                    self.request('/v1/chat/completions',data,headers={'Idempotency-Key':f'p6-budget-off-{stream}'})
+                with denied.exception as response:
+                    self.assertEqual((response.code,json.load(response)['error']['code']),
+                                     (409,'budget_not_configured'))
+                self.assertEqual(self.calls,[])
+                self.assertEqual(self.bridge.chains,[])
+                self.assertEqual(self.bridge.idempotency,{})
     def test_unauthorized_and_cross_origin_denied(self):
         with self.assertRaises(HTTPError) as e: self.request('/v1/models',auth=False)
         self.assertEqual(e.exception.code,401)

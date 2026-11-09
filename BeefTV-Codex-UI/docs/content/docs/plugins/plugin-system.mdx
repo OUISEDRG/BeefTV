@@ -147,6 +147,14 @@ eagle-asset-connector.beeftv-plugin
 
 这些字段必须使用 `beeftv.plugin/v3`；旧宿主拒绝加载该版本，避免忽略字段后发送错误请求。
 
+### Provider 媒体交付确认
+
+使用 `beeftv.plugin/v3` 的异步媒体 Provider 可同时声明 `response.artifacts` 和 `ack`。创建请求可以将宿主提供的 `request.extra.beefTaskId` 映射为请求头。产物描述按输出序号提供任务 ID、产物 ID、实际 SHA256、大小与媒体类型。旧任务无产物描述时沿用已有交付。
+
+媒体 ACK 协议的 `poll` 和可选 `result` 都使用路径包含 `{{taskId}}` 的 GET。轮询及媒体下载沿用首次受理回执。任务结果取回只查询原作业。
+
+`ack` 必须是由原 Provider 回执限定的 POST。清单可把 `request.extra.mediaAck` 映射为正文，把 `request.extra.mediaAckKey` 映射为幂等请求头。宿主核验原始媒体，确认资源入库及相应绑定后再发送。对同一任务、同一产物的重试沿用同一正文和幂等键。
+
 ## 6. 宿主 API 边界
 
 插件不得直接导入页面组件、store 或内部 API 文件。宿主通过版本化 SDK 提供能力。

@@ -1,5 +1,5 @@
 import { Image as AntImage, Popover } from "antd";
-import { useState } from "react";
+import { useState, type PointerEvent } from "react";
 import { AtSign, FileText, GripVertical, ImageIcon, Link2, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -83,11 +83,17 @@ export function referenceShelfHeading(references: CanvasResourceReference[]) {
     return `${label} · ${references.length}`;
 }
 
+function preservePromptSelection(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+}
+
 export function ConnectedReferenceShelf({
     targetNodeId,
     references,
     theme,
     onInsert,
+    onInsertThumbnail,
     onRemove,
     onReorder,
     onReplaceReference,
@@ -97,6 +103,7 @@ export function ConnectedReferenceShelf({
     references: CanvasResourceReference[];
     theme: CanvasTheme;
     onInsert: (reference: CanvasResourceReference) => void;
+    onInsertThumbnail?: (reference: CanvasResourceReference) => void;
     onRemove?: (reference: CanvasResourceReference) => void;
     onReorder?: (orderedNodeIds: string[]) => void;
     onReplaceReference?: (oldReference: CanvasResourceReference, sourceNodeId: string) => void;
@@ -133,6 +140,8 @@ export function ConnectedReferenceShelf({
                     {activeReferences.map((reference, index) => {
                         const displayName = canvasResourceDisplayName(reference);
                         const canPreview = Boolean(reference.previewUrl) && (reference.kind === "image" || reference.kind === "character" || reference.kind === "video");
+                        const insertThumbnail = reference.kind === "image" && canPreview ? onInsertThumbnail : undefined;
+                        const thumbnailLabel = insertThumbnail ? `插入 @${reference.label}` : canPreview ? `预览 ${reference.title}` : `插入 @${displayName}`;
                         const isDropTarget = dropTargetReferenceId === reference.id;
                         return (
                             <span
@@ -225,21 +234,45 @@ export function ConnectedReferenceShelf({
                                     </button>
                                 ) : null}
                                 <span className="canvas-node-reference-order" aria-hidden>{index + 1}</span>
-                                <button
-                                    type="button"
-                                    className="canvas-node-reference-preview"
-                                    style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke }}
-                                    title={canPreview ? `预览 ${reference.title}` : `插入 @${displayName}`}
-                                    aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${displayName}`}
-                                    onClick={() => (canPreview ? setImagePreview(reference) : onInsert(reference))}
-                                >
-                                    <ReferenceThumbnail reference={reference} />
-                                    {canPreview ? (
-                                        <span className="canvas-node-reference-preview-hint" aria-hidden="true">
+                                <span className="relative flex shrink-0">
+                                    <button
+                                        type="button"
+                                        className={`canvas-node-reference-preview${insertThumbnail ? " is-insert-reference" : ""}`}
+                                        style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke }}
+                                        title={thumbnailLabel}
+                                        aria-label={thumbnailLabel}
+                                        onPointerDown={insertThumbnail ? preservePromptSelection : undefined}
+                                        onClick={(event) => {
+                                            if (insertThumbnail) {
+                                                event.stopPropagation();
+                                                insertThumbnail(reference);
+                                            } else if (canPreview) setImagePreview(reference);
+                                            else onInsert(reference);
+                                        }}
+                                    >
+                                        <ReferenceThumbnail reference={reference} />
+                                        {canPreview && !insertThumbnail ? (
+                                            <span className="canvas-node-reference-preview-hint" aria-hidden="true">
+                                                <Maximize2 className="size-3" />
+                                            </span>
+                                        ) : null}
+                                    </button>
+                                    {insertThumbnail ? (
+                                        <button
+                                            type="button"
+                                            className="canvas-node-reference-preview-button"
+                                            title={`预览 ${displayName}`}
+                                            aria-label={`预览 ${displayName}`}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                setImagePreview(reference);
+                                            }}
+                                        >
                                             <Maximize2 className="size-3" />
-                                        </span>
+                                        </button>
                                     ) : null}
-                                </button>
+                                </span>
                                 <button
                                     type="button"
                                     className="canvas-node-reference-label"

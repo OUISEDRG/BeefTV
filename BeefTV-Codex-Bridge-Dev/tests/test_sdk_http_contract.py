@@ -69,7 +69,8 @@ class SDKHTTPContractTests(unittest.TestCase):
             value = FakeCodexRPC()
             instances.append(value)
             return value
-        bridge = CompletionBridge(factory, models=['gpt-6-astra'], timeout=5)
+        bridge = CompletionBridge(factory, models=['gpt-6-astra'], timeout=5,
+                                  authorize_submission=lambda: None)
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass

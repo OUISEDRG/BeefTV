@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false, "required": ["schemaVersion", "command", "arguments", "operationClass"],
+  "properties": {"schemaVersion": {"const": 1},
+    "command": {"enum": ["auth", "project", "series", "library", "storyboard", "prompt", "capability", "point", "image", "video", "task"]},
+    "arguments": {"type": "array", "items": {"type": "string"}},
+    "operationClass": {"enum": ["read", "prepare", "paid_submission"]}}
+}

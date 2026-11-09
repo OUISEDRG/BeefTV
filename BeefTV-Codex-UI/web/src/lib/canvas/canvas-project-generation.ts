@@ -227,6 +227,7 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
         taskErrorCode: task.errorCode,
         taskFailureDiagnostics: task.failureDiagnostics,
         taskProviderRequestId: task.providerRequestId,
+        taskGenerationCancelUnsupported: task.generationCancelUnsupported,
         taskOfficialStatus: task.officialStatus,
         taskReceiptRecorded: task.receiptRecorded,
         taskCreatedAt: task.createdAt || task.created_at,
@@ -267,6 +268,7 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
     delete next.taskErrorCode;
     delete next.taskFailureDiagnostics;
     delete next.taskProviderRequestId;
+    delete next.taskGenerationCancelUnsupported;
     delete next.taskOfficialStatus;
     delete next.taskReceiptRecorded;
     delete next.taskCreatedAt;

@@ -1,3 +1,4 @@
+from tests.fixtures_budget import intent_fields
 import base64
 import hashlib
 import io
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 from PIL import Image
 from bridge import Bridge, BridgeError, PROJECT, SERIES
+from tests.fixtures_budget import FundedBridge as Bridge
 from tests.test_verbatim_prompt import official_tag
 from image_flow import ImageFlow, ImageGateway, image_models, validate_image_request, download_image
 
@@ -93,7 +95,7 @@ class ImageFlowTests(unittest.TestCase):
         job=self.flow.prepare(request(),'image-1'); self.gateway.quote=5
         with self.assertRaises(BridgeError): self.flow.approve(job['id'],job['quoteId'],3)
         self.assertNotIn('submit',self.gateway.calls)
-        fresh=self.bridge.get(job['id']); self.assertEqual(fresh['pointsEstimate'],5)
+        fresh=self.bridge.get(job['id']); self.assertEqual(fresh['pointsEstimate'],'5')
         self.assertNotEqual(fresh['quoteId'],job['quoteId'])
 
     def test_lost_response_reconciles_image_task_after_restart(self):
@@ -182,7 +184,7 @@ class ImageGatewayTests(unittest.TestCase):
 
     def test_native_submit_uses_image_resolution_and_aspect_ratio(self):
         gateway=ImageGateway(); job={'kind':'image','model':MODEL,'status':'submitting','approvedAt':1,
-          'approvedPoints':3,'pointsEstimate':3,'storyboardId':300,'resolution':'3K','aspect_ratio':'1:1'}
+          'approvedPoints':3,'pointsEstimate':3,'storyboardId':300,'resolution':'3K','aspect_ratio':'1:1', **intent_fields(3)}
         with patch.object(gateway,'_invoke',return_value={'taskId':701}) as cli:
             self.assertEqual(gateway.submit_video(job),{'taskId':701})
         args=cli.call_args.args; self.assertEqual(args[:2],('image','produce'))
@@ -198,7 +200,7 @@ class ImageGatewayTests(unittest.TestCase):
             with self.assertRaises(BridgeError): gateway.inspect_board(job)
 
     def test_download_rejects_untrusted_url_before_network(self):
-        with patch('image_flow.requests.get') as get:
+        with patch('dreama_image.requests.get') as get:
             for url in ('http://127.0.0.1/secret','https://jzinnovation.jxbaobian.cn:invalid/image'):
                 with self.assertRaises(BridgeError): download_image(url,Path('ignored.img'))
             get.assert_not_called()
@@ -211,7 +213,7 @@ class ImageGatewayTests(unittest.TestCase):
             def iter_content(self,size): yield png()
         with tempfile.TemporaryDirectory() as root:
             path=Path(root)/'result.img'
-            with patch('image_flow.requests.get',return_value=Response()) as get:
+            with patch('dreama_image.requests.get',return_value=Response()) as get:
                 result=download_image(URL,path)
             self.assertEqual(path.read_bytes(),png()); self.assertEqual(result['mimeType'],'image/png')
             self.assertEqual(result['sha256'],hashlib.sha256(png()).hexdigest())
@@ -225,6 +227,6 @@ class ImageGatewayTests(unittest.TestCase):
             def iter_content(self,size): yield b'<html>not an image</html>'
         with tempfile.TemporaryDirectory() as root:
             path=Path(root)/'result.img'
-            with patch('image_flow.requests.get',return_value=Response()):
+            with patch('dreama_image.requests.get',return_value=Response()):
                 with self.assertRaises(BridgeError): download_image(URL,path)
             self.assertEqual(list(Path(root).iterdir()),[])

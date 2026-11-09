@@ -33,6 +33,7 @@ type Runtime interface {
 type Completion interface {
 	Save(*model.Task, []byte, []byte, bool) error
 	Present(*model.Task) *model.Task
+	PersistMedia(model.Task, map[string]interface{}) (map[string]interface{}, error)
 }
 type Dependencies struct {
 	Repository  *repository.Repository

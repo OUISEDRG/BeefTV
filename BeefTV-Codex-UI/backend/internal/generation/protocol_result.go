@@ -2,6 +2,7 @@ package generation
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,9 +46,21 @@ func finishProtocolResult(ctx context.Context, config Config, mode string, taskI
 	if len(references) == 0 {
 		return nil, errors.New("声明式协议已完成但没有返回媒体地址")
 	}
+	output := map[string]interface{}{"mode": mode}
+	if len(result.Artifacts) > 0 {
+		call, _ := CallMetaFromContext(ctx)
+		if strings.TrimSpace(taskID) == "" || (mode != "image" && len(references) != 1) {
+			return nil, errors.New("media delivery requires the original provider receipt and complete outputs")
+		}
+		if err := protocol.ValidateMediaArtifacts(result.Artifacts, call.TaskID, len(references)); err != nil {
+			return nil, err
+		}
+		output["deliveryArtifacts"] = result.Artifacts
+		output["deliveryProviderRequestId"] = taskID
+	}
 	items := make([]interface{}, 0, len(references))
 	for index, reference := range references {
-		if mode == "image" && !reference.Ephemeral && strings.TrimSpace(reference.DataURL) == "" && strings.TrimSpace(reference.URL) != "" {
+		if mode == "image" && len(result.Artifacts) == 0 && !reference.Ephemeral && strings.TrimSpace(reference.DataURL) == "" && strings.TrimSpace(reference.URL) != "" {
 			value := strings.TrimSpace(reference.URL)
 			if _, err := outbound.ValidateOutboundURL(value); err != nil {
 				return nil, err
@@ -86,12 +99,15 @@ func finishProtocolResult(ctx context.Context, config Config, mode string, taskI
 				return nil, err
 			}
 		}
+		if len(result.Artifacts) > 0 && !result.Artifacts[index].MatchesBytes(mimeType, data) {
+			return nil, fmt.Errorf("media artifact %d does not match verified provider bytes", index)
+		}
 		item := map[string]interface{}{"dataUrl": DataURL(mimeType, data), "mimeType": mimeType}
 		items = append(items, item)
 	}
 	switch mode {
 	case "image":
-		output := map[string]interface{}{"mode": "image", "images": items}
+		output["images"] = items
 		layers := make([]map[string]any, 0)
 		for index, reference := range references {
 			if metadata, ok := reference.Metadata["layer"].(map[string]any); ok && len(metadata) > 0 {
@@ -109,18 +125,19 @@ func finishProtocolResult(ctx context.Context, config Config, mode string, taskI
 		if result.Usage != nil {
 			output["usage"] = result.Usage
 		}
-		return output, nil
 	case "video":
-		return map[string]interface{}{"mode": "video", "video": items[0]}, nil
+		output["video"] = items[0]
 	default:
-		return map[string]interface{}{"mode": "audio", "audio": items[0]}, nil
+		output["audio"] = items[0]
 	}
+	return output, nil
 }
 
 // finishProtocolAdapterResult 优先消费 create/poll 已返回的内联或 URL 结果，只有插件明确声明独立结果端点时才下载。
 // 空响应或下载失败必须向上失败，不能生成伪素材；application/octet-stream 仅表示传输层未知类型，
 // 不会把未知内容伪装成具体图片、视频或音频 MIME。
 func FinishProtocolAdapterResult(ctx context.Context, input Input, adapter protocol.Adapter, request protocol.GenerationRequest, taskID string, result *protocol.Result, pollPolicy VideoPollPolicy) (map[string]interface{}, error) {
+	ctx = pinProtocolReceipt(ctx, adapter, taskID)
 	if input.Mode == "video" {
 		pollPolicy = videoPollPolicyForConfig(ctx, input.Config, pollPolicy)
 		if auth, ok := adapter.(protocol.MediaAuthAdapter); ok {
@@ -135,7 +152,11 @@ func FinishProtocolAdapterResult(ctx context.Context, input Input, adapter proto
 		return queryProtocolVideoSource(ctx, input, adapter, request, taskID, index, referenceID)
 	}
 	if ProtocolResultHasOutput(input.Mode, result) {
-		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy, renew)
+		output, err := finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy, renew)
+		if err == nil && len(result.Artifacts) > 0 {
+			output["deliveryRoute"] = MediaDeliveryRoute(input.Config, adapter)
+		}
+		return output, err
 	}
 	resultAdapter, ok := adapter.(protocol.ResultAdapter)
 	capability, hasCapability := adapter.(protocol.ResultCapability)
@@ -188,6 +209,13 @@ func FinishProtocolAdapterResult(ctx context.Context, input Input, adapter proto
 	return FinishProtocolResult(ctx, input.Config, input.Mode, taskID, downloaded, pollPolicy)
 }
 
+// MediaDeliveryRoute binds an acknowledgement to the original provider and endpoint
+// without storing the endpoint or credentials in the task result or outbox.
+func MediaDeliveryRoute(config Config, adapter protocol.Adapter) string {
+	meta := adapter.Metadata()
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.TrimSpace(config.BaseURL)+"\x00"+meta.ID+"\x00"+meta.Version)))
+}
+
 func protocolVideoRequestSource(config Config, spec protocol.RequestSpec) (VideoResultSource, error) {
 	rawURL, err := ProtocolRequestURL(config.BaseURL, spec)
 	if err != nil {
@@ -204,7 +232,7 @@ func queryProtocolVideoSource(ctx context.Context, input Input, adapter protocol
 	if err != nil {
 		return VideoResultSource{}, err
 	}
-	body, err := ExecuteProtocolRequest(WithRequestKind(ctx, "poll"), input.Config, spec)
+	body, err := ExecuteProtocolRequest(WithRequestKind(pinProtocolReceipt(ctx, adapter, taskID), "poll"), input.Config, spec)
 	if err != nil {
 		return VideoResultSource{}, err
 	}

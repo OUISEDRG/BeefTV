@@ -114,6 +114,8 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [expandedModalRendered, setExpandedModalRendered] = useState(false);
     const [expandedModalSize, setExpandedModalSize] = useState<{ width: number; height: number } | null>(null);
     const expandedModalRef = useRef<HTMLDivElement>(null);
+    const connectedReferenceInsertionRef = useRef<((reference: CanvasResourceReference) => void) | null>(null);
+    const expandedReferenceInsertionRef = useRef<((reference: CanvasResourceReference) => void) | null>(null);
     const [promptContentHeight, setPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, false));
     const [expandedPromptContentHeight, setExpandedPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, true));
     const [manualPromptHeight, setManualPromptHeight] = useState<number | null>(null);
@@ -539,6 +541,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         const bounds = expanded ? expandedPromptBounds : promptBounds;
         const height = expanded ? expandedComposerHeight : composerHeight;
         const fontSize = expanded ? expandedFontSize : promptFontSize;
+        const insertionRef = expanded ? expandedReferenceInsertionRef : connectedReferenceInsertionRef;
         return (
             <>
                 {onToggleQuickConnect ? <div className="shrink-0 px-2.5 pb-1 pt-2">
@@ -553,18 +556,21 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         references={selectableReferences}
                         theme={theme}
                         onInsert={insertPromptReference}
+                        onInsertThumbnail={(reference) => insertionRef.current?.(reference)}
                         onRemove={(reference) => onRemoveReference?.(node.id, reference)}
                         onReorder={onReorderReferences ? (orderedNodeIds) => onReorderReferences(node.id, orderedNodeIds) : undefined}
                         onReplaceReference={onReplaceReference ? (oldReference, sourceNodeId) => onReplaceReference(node.id, oldReference, sourceNodeId) : undefined}
                         onReplaceReferenceFiles={onReplaceReferenceFiles ? (oldReference, files) => onReplaceReferenceFiles(node.id, oldReference, files) : undefined}
                     />
                     <CanvasResourceMentionTextarea
+                        key={node.id}
                         value={prompt}
                         references={selectableReferences}
                         selectedAssetReferences={referenceCheck.selectedReferences}
                         referenceIssues={referenceCheck.issues}
                         referenceAction={expanded === expandedPromptOpen ? referenceAction : null}
                         onReferenceActionHandled={() => setReferenceAction(null)}
+                        connectedReferenceInsertionRef={insertionRef}
                         onSelectReference={onAddReference ? (reference) => onAddReference(node.id, reference) : undefined}
                         includeAssetLibrary
                         onChange={updatePrompt}

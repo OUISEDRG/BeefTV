@@ -11,6 +11,7 @@ import (
 	"infinite-canvas/backend/internal/canvas"
 	"infinite-canvas/backend/internal/depthcapture"
 	"infinite-canvas/backend/internal/diagnostics"
+	"infinite-canvas/backend/internal/dreamaintegration"
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/mediaattempt"
 	"infinite-canvas/backend/internal/model"
@@ -213,6 +214,9 @@ func (s *Service) StartWorker() {
 	}
 	s.taskWorker().start(ctx)
 	s.startResourceDeletionWorker(ctx)
+	s.runWorkerLoop(func(ctx context.Context) {
+		s.mediaAcks().Run(ctx, generationDeliveryRecoveryInterval)
+	})
 }
 
 func (s *Service) BeginDrain() { s.stopGenerationDownloads(); s.backgroundWorkers().BeginDrain() }
@@ -322,8 +326,13 @@ func (s *Service) RetryTask(userID string, id string) (*model.Task, error) {
 }
 
 func (s *Service) CancelTask(ctx context.Context, userID string, id string) (*model.Task, error) {
-	if task, err := s.repo.TaskForUser(userID, id); err == nil && task.Status == model.TaskStatusSucceeded {
-		return s.pauseGenerationDownload(*task, "delivery_paused")
+	if task, err := s.repo.TaskForUser(userID, id); err == nil {
+		if task.Status == model.TaskStatusSucceeded {
+			return s.pauseGenerationDownload(*task, "delivery_paused")
+		}
+		if (task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning) && dreamaintegration.MatchesGenerationTask(task.InputJSON) {
+			return nil, kernel.BadAuthRequest("剧梦生成暂不支持取消，仍可查询任务和取回结果")
+		}
 	}
 	return s.taskDomain().Cancel(ctx, userID, id)
 }

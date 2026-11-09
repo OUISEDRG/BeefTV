@@ -81,8 +81,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		return nil, BadAuthRequest("原任务不是视频或超分任务")
 	}
 	upscale := task.IsUpscale() || (unified && managedQuery.Kind == "upscale")
-	if !strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_") && !upscale && !(unified && task.Type == "canvas_audio" && managedQuery.Kind == "audio") {
-		return nil, BadAuthRequest("该任务不是视频生成任务")
+	audio := task.Type == "canvas_audio"
+	if !strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_") && !upscale && !audio {
+		return nil, BadAuthRequest("该任务不是视频或音频生成任务")
 	}
 
 	s.hydrateTaskProviderRequestID(task)
@@ -110,6 +111,12 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		}
 		ctx = ensureOfficialProtocolAdapter(ctx, config.InterfaceType)
 		adapter, declarative = declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+		if audio {
+			ack, ok := adapter.(protocol.MediaAckAdapter)
+			if !declarative || !ok || !ack.MediaAckAvailable() {
+				return nil, BadAuthRequest("该音频协议不支持安全查询原作业")
+			}
+		}
 		beefVideo = isBeefAPIVideoConfig(ctx, config)
 		workflowVideo = workflow.IsProviderInterface(config.InterfaceType)
 		_, officialVideo := generation.OfficialDeclarativeVideoInterface(config.InterfaceType)

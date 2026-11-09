@@ -30,19 +30,17 @@ export function dreamaCanvasVideoConfig(config: AiConfig, binding: DreamaCanvasB
     return { config: effective, error, ratio, ratioConflict };
 }
 
-export function dreamaTaskPresentation(task: Pick<DreamaTask, "status" | "stage" | "cancelable">) {
-    const labels: Record<string, string> = {
-        preparation_queued: "等待准备", preparing: "准备中", prepared: "等待执行", countdown: "等待执行", submitting: "提交中",
-        queued: "排队中", submitted: "已提交", processing: "生成中", running: "生成中", completed: "已完成", succeeded: "已完成",
-        failed: "失败", canceled: "已取消", cancelled: "已取消", unknown: "等待核对", submission_unknown: "提交结果待核对",
-        download_failed: "结果待取回", binding_verification_required: "项目归属待核验",
-    };
-    const terminal = ["completed", "succeeded", "failed", "cancelled", "canceled"].includes(task.status);
-    const recovery = ["unknown", "submission_unknown", "download_failed", "binding_verification_required"].includes(task.status);
-    const stages: Record<string, string> = { upload: "上传参考素材", save: "保存生成结果", poll: "查询生成进度", submit: "提交生成请求", download: "取回生成结果" };
-    const reference = task.stage?.match(/^reference:(\d+)$/);
-    const detail = terminal || recovery || task.status === "prepared" ? undefined : reference ? `准备第 ${reference[1]} 项参考素材` : stages[task.stage || ""];
-    return { label: labels[task.status] || "状态待刷新", detail, pending: !terminal && (task.cancelable || Boolean(labels[task.status])) };
+export function dreamaTaskException(task: Pick<DreamaTask, "status" | "stage" | "error">): string | undefined {
+    if (task.status === "prepared" && task.stage === "budget_blocked") return "预算待配置或不足";
+    if (task.status === "prepared" && task.error) return "预检需要核对";
+    switch (task.status) {
+        case "unknown":
+        case "recovery_required": return "等待核对";
+        case "submission_unknown": return "提交结果待核对";
+        case "download_failed": return "结果待取回";
+        case "binding_verification_required": return "项目归属待核验";
+        default: return undefined;
+    }
 }
 
 export function dreamaWorkbenchChannel(config: AiConfig): ModelChannel | undefined {

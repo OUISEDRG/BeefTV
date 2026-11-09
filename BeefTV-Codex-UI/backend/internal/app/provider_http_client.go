@@ -177,9 +177,10 @@ func recordProviderRequest(service *Service, req *http.Request, startedAt time.T
 		}
 	}
 	service.EnrichAPICallLog(&callLog, responseBody)
-	// Only creation can discover a new video task identity. Polling and result
-	// retrieval must not reassign an existing task before its response is checked.
-	if call.Capability == "video" && requestKind != "create" && strings.TrimSpace(call.ProviderRequestID) != "" {
+	// Cancellation and follow-up video calls use the saved identity. Logging
+	// must not reassign it from a response that has not been validated yet.
+	usesSavedIdentity := call.PinnedReceipt || requestKind == "cancel" || requestKind == "cancel-query" || requestKind == "media-ack" || (call.Capability == "video" && requestKind != "create")
+	if usesSavedIdentity && strings.TrimSpace(call.ProviderRequestID) != "" {
 		callLog.ProviderRequestID = call.ProviderRequestID
 	}
 	_ = service.LogAPICall(callLog)

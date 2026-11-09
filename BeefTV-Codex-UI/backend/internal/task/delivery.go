@@ -173,8 +173,12 @@ func TargetBindingFromInput(inputJSON string) TargetBinding {
 // Asset/Representation identity. Canvas and create-page tasks stay on the
 // generation_ asset ID that matches the browser materializer.
 func HasWorkflowOutputIntent(inputJSON string) bool {
+	return WorkflowOutputStepID(inputJSON) != ""
+}
+
+func WorkflowOutputStepID(inputJSON string) string {
 	if strings.TrimSpace(inputJSON) == "" {
-		return false
+		return ""
 	}
 	var input struct {
 		WorkflowStepID string `json:"workflowStepId"`
@@ -183,9 +187,12 @@ func HasWorkflowOutputIntent(inputJSON string) bool {
 		} `json:"metadata"`
 	}
 	if json.Unmarshal([]byte(inputJSON), &input) != nil {
-		return false
+		return ""
 	}
-	return strings.TrimSpace(input.WorkflowStepID) != "" || strings.TrimSpace(input.Metadata.WorkflowStepID) != ""
+	if stepID := strings.TrimSpace(input.WorkflowStepID); stepID != "" {
+		return stepID
+	}
+	return strings.TrimSpace(input.Metadata.WorkflowStepID)
 }
 
 func BindOutput(output CanonicalOutput, taskID string, binding TargetBinding) CanonicalOutput {

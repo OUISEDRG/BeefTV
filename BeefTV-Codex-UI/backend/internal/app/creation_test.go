@@ -22,6 +22,15 @@ func creationTestService(t *testing.T) (*Service, *gorm.DB, string, CreationGuar
 	if err != nil {
 		t.Fatal(err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if err = db.AutoMigrate(database.LocalModels()...); err != nil {
 		t.Fatal(err)
 	}

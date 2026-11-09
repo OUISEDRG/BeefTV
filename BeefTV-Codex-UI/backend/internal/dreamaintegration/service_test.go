@@ -61,6 +61,9 @@ func TestExchangeRejectsUntrustedRouteAndChannelWithoutSending(t *testing.T) {
 		{"codex", "GET", "status", nil}, {"dreama-local-preflight", "GET", "../v1/jobs", nil},
 		{"dreama-local-preflight", "GET", "projects", map[string]string{"apiKey": "bad"}},
 		{"dreama-local-preflight", "POST", "tasks/a/approve", nil},
+		{"dreama-local-preflight", "POST", "tasks/a/cancel", nil},
+		{"dreama-local-preflight", "GET", "tasks", map[string]string{"scope": "exceptions"}},
+		{"dreama-local-preflight", "GET", "tasks", map[string]string{"scope": "all", "canvasId": "canvas-a"}},
 	} {
 		if _, err := svc.Exchange(context.Background(), request.channel, request.method, request.path, request.query, nil); err == nil {
 			t.Error("unsafe request accepted")
@@ -68,6 +71,22 @@ func TestExchangeRejectsUntrustedRouteAndChannelWithoutSending(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatal("invalid request reached upstream")
+	}
+}
+
+func TestExchangeScopesExceptionsToCanvas(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/integration/v1/tasks" ||
+			r.URL.Query().Get("canvasId") != "canvas-a" || r.URL.Query().Get("scope") != "exceptions" {
+			t.Errorf("unexpected exception query %s %s", r.Method, r.URL)
+		}
+		_, _ = w.Write([]byte(`{"items":[{"id":"needs-review","status":"submission_unknown"}]}`))
+	}))
+	defer server.Close()
+	body, err := New(fixture(t, server.URL)).Exchange(context.Background(), "dreama-local-preflight", http.MethodGet,
+		"tasks", map[string]string{"scope": "exceptions", "canvasId": "canvas-a"}, nil)
+	if err != nil || !strings.Contains(string(body), "needs-review") {
+		t.Fatalf("exception query: %s %v", body, err)
 	}
 }
 func TestExchangeDoesNotFollowRedirectOrExposeCredentials(t *testing.T) {

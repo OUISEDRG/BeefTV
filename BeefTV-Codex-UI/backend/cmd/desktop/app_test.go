@@ -177,7 +177,7 @@ func TestDesktopAppBoundMethodsStayTiny(t *testing.T) {
 		names = append(names, typ.Method(i).Name)
 	}
 	sort.Strings(names)
-	if !reflect.DeepEqual(names, []string{"CheckForUpdate", "ChooseStorageDirectory", "CleanupPreviousStorage", "ConfirmUpdateStartup", "ConsumeSkillLink", "DepthComponentStatus", "DownloadDepthComponents", "DownloadUpdate", "InstallUpdate", "MigrateStorage", "OpenBeefTVGitHub", "OpenBeefTVWebsite", "OpenBeefTVX", "OpenSkillMarketURL", "OpenUpdateLogDirectory", "PauseDepthComponentDownload", "ReferenceStorageSettings", "ReferenceUploadStatus", "RuntimeConfig", "SaveOwnedArchive", "SaveOwnedArtifact", "SaveOwnedMedia", "SaveReferenceStorage", "StorageMigrationStatus", "StorageSettings", "TestReferenceStorage", "UpdateStatus", "UploadReferenceMedia"}) {
+	if !reflect.DeepEqual(names, []string{"CheckForUpdate", "ChooseStorageDirectory", "CleanupPreviousStorage", "ConfirmUpdateStartup", "ConsumeSkillLink", "DepthComponentStatus", "DownloadDepthComponents", "DownloadUpdate", "InstallUpdate", "MigrateStorage", "OpenBeefTVGitHub", "OpenBeefTVWebsite", "OpenBeefTVX", "OpenSkillMarketURL", "OpenUpdateLogDirectory", "PauseDepthComponentDownload", "ReferenceStorageSettings", "ReferenceUploadStatus", "RuntimeConfig", "SaveOwnedArchive", "SaveOwnedArtifact", "SaveOwnedMedia", "SaveOwnedMediaBatch", "SaveReferenceStorage", "StorageMigrationStatus", "StorageSettings", "TestReferenceStorage", "UpdateStatus", "UploadReferenceMedia"}) {
 		t.Fatalf("bound methods = %v", names)
 	}
 }
@@ -327,6 +327,66 @@ func TestSaveOwnedMediaCopiesWorkspaceResource(t *testing.T) {
 	}
 	if string(body) != "hello-media" {
 		t.Fatalf("copied body = %q", body)
+	}
+}
+
+func TestSaveOwnedMediaBatchKeepsExistingFilesAndContinuesAfterFailure(t *testing.T) {
+	app := newDesktopApp(t.TempDir())
+	app.startup(context.Background())
+	defer app.shutdown(context.Background())
+	first := uploadDesktopResource(t, app, []byte("first media"))
+	third := uploadDesktopResource(t, app, []byte("third media"))
+	destination := t.TempDir()
+	if err := os.WriteFile(filepath.Join(destination, "01_图像.png"), []byte("existing"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dialogs := 0
+	app.chooseMediaDirectory = func(context.Context) (string, error) {
+		dialogs++
+		return destination, nil
+	}
+	result, err := app.SaveOwnedMediaBatch([]OwnedMediaBatchEntry{
+		{Name: "01_图像.png", ResourceID: first},
+		{Name: "02_不存在.mp4", ResourceID: "missing-id"},
+		{Name: "03_语音.wav", ResourceID: third},
+	})
+	if err != nil || result.Cancelled || result.Downloaded != 2 || result.Failed != 1 || dialogs != 1 {
+		t.Fatalf("batch result = %+v, err %v, dialogs %d", result, err, dialogs)
+	}
+	for name, want := range map[string]string{"01_图像.png": "existing", "01_图像 (2).png": "first media", "03_语音.wav": "third media"} {
+		got, err := os.ReadFile(filepath.Join(destination, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("%q = %q, err %v; want %q", name, got, err, want)
+		}
+	}
+	entries, err := os.ReadDir(destination)
+	if err != nil || len(entries) != 3 {
+		t.Fatalf("unexpected batch artifacts: %v, err %v", entries, err)
+	}
+}
+
+func TestSaveOwnedMediaBatchValidatesNamesBeforeChoosingFolder(t *testing.T) {
+	app := newDesktopApp(t.TempDir())
+	app.wailsCtx = context.Background()
+	app.chooseMediaDirectory = func(context.Context) (string, error) {
+		t.Fatal("invalid batch must not open the directory picker")
+		return "", nil
+	}
+	for _, name := range []string{"", "../outside.png", `..\outside.png`, "folder/file.png", "01_clip.mp4:stream", "01_clip.mp4.", "NUL.png", "\u00a0NUL.png"} {
+		_, err := app.SaveOwnedMediaBatch([]OwnedMediaBatchEntry{{Name: "01_valid.png", ResourceID: "owned"}, {Name: name, ResourceID: "owned"}})
+		if err == nil {
+			t.Errorf("batch accepted %q", name)
+		}
+	}
+}
+
+func TestSaveOwnedMediaBatchFolderCancellation(t *testing.T) {
+	app := newDesktopApp(t.TempDir())
+	app.wailsCtx = context.Background()
+	app.chooseMediaDirectory = func(context.Context) (string, error) { return "", nil }
+	result, err := app.SaveOwnedMediaBatch([]OwnedMediaBatchEntry{{Name: "01_clip.mp4", ResourceID: "owned"}})
+	if err != nil || !result.Cancelled || result.Downloaded != 0 || result.Failed != 0 {
+		t.Fatalf("cancelled batch = %+v, err %v", result, err)
 	}
 }
 

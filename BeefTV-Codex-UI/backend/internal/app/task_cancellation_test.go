@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,45 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestCancelTaskDoesNotCancelDreamaGenerationWithoutUpstreamSupport(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+	for _, protocol := range []string{"dreama-videos-async", "dreama-images-async", "dreama-extension-async", "dreama-enhancement-async", "dreama-audio-async", "seedance-videos-compatible"} {
+		t.Run(protocol, func(t *testing.T) {
+			config := providerConfig{InterfaceType: protocol}
+			if protocol == "seedance-videos-compatible" {
+				config.ChannelID = "dreama-video-enhancement"
+			}
+			for _, status := range []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning} {
+				task := model.Task{ID: newID(), UserID: "local", Status: status,
+					InputJSON: mustJSON(canvasGenerationInput{Config: config})}
+				if status == model.TaskStatusRunning {
+					task.ProviderRequestID = "already-accepted"
+				}
+				if err := db.Create(&task).Error; err != nil {
+					t.Fatal(err)
+				}
+				if !taskForOutput(task).CancelUnsupported || !taskSummaryForOutput(task).CancelUnsupported {
+					t.Fatal("task projection did not expose the unsupported cancellation capability")
+				}
+				if _, err := svc.CancelTask(context.Background(), task.UserID, task.ID); err == nil || !strings.Contains(err.Error(), "剧梦") {
+					t.Fatalf("cancel did not report unavailable for %s: %v", status, err)
+				}
+				stored, err := svc.repo.TaskForUser(task.UserID, task.ID)
+				if err != nil || stored.Status != status || stored.ProviderRequestID != task.ProviderRequestID || stored.CompletedAt != nil {
+					t.Fatalf("native task changed on cancellation attempt: %+v %v", stored, err)
+				}
+			}
+		})
+	}
+}
 
 func TestCancelTaskCancelsRunningTask(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})

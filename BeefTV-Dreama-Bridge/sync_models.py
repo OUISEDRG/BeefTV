@@ -7,6 +7,7 @@ import os
 import subprocess
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from dreama_cli import DreamaCliClient
 from install_channel import CHANNEL_ID,decode,channel
 from model_catalog import models,selected_models
 from server import ROOT,PORT,local_token
@@ -38,12 +39,10 @@ def merge(document,token):
 def sync():
     running=subprocess.run(['tasklist','/FI','IMAGENAME eq BeefTV.exe','/FO','CSV','/NH'],capture_output=True,check=True)
     if b'beeftv.exe' in running.stdout.lower(): raise RuntimeError('请先关闭BeefTV，再同步模型。')
-    cli=Path(os.environ['LOCALAPPDATA'])/'Programs/Dreama/Dreama.exe'
-    response=subprocess.run([str(cli),'capability','list','--kind','video'],capture_output=True,text=True,encoding='utf-8',timeout=90,check=True)
-    body=json.loads(response.stdout)
-    if not body.get('ok') or not body.get('result',{}).get('items'): raise RuntimeError('模型目录查询失败。')
+    result=DreamaCliClient().run('capability','list','--kind','video')
+    if not result.get('items'): raise RuntimeError('模型目录查询失败。')
     catalog=ROOT/'catalog.json'; previous_catalog=catalog.read_bytes()
-    catalog.write_text(json.dumps({'items':body['result']['items']},ensure_ascii=False,indent=2),'utf-8')
+    catalog.write_text(json.dumps({'items':result['items']},ensure_ascii=False,indent=2),'utf-8')
     try:
         specs=selected_models()
         pointer=Path(os.environ['APPDATA'])/'BeefTV/storage-location.json'

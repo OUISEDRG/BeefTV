@@ -28,6 +28,10 @@ class FakeJobs:
         self.calls.append(('cancel', job_id))
         return {'id': job_id, 'status': 'cancelled', 'images': []}
 
+    def acknowledge(self, job_id, body, key):
+        self.calls.append(('ack', job_id, body, key))
+        return {'acknowledged': True, 'artifactId': body['artifactId'], 'cleanupState': 'held'}
+
 
 class ImageHttpTests(unittest.TestCase):
     def setUp(self):
@@ -55,6 +59,32 @@ class ImageHttpTests(unittest.TestCase):
                           method=method, headers=h)
         with self.opener.open(request, timeout=3) as response:
             return response.status, json.load(response)
+
+    def test_image_delivery_ack_uses_authenticated_job_scoped_route(self):
+        path = '/v1/images/jobs/image-123/ack'
+        body = {'artifactId': 'artifact-fixture'}
+        with self.assertRaises(HTTPError) as unauthenticated:
+            self.request(path, 'POST', body, auth=False)
+        self.assertEqual(unauthenticated.exception.code, 401)
+        unauthenticated.exception.close()
+        self.assertEqual(self.jobs.calls, [])
+        status, receipt = self.request(path, 'POST', body, headers={'Idempotency-Key': 'ack-fixture'})
+        self.assertEqual(status, 200)
+        self.assertTrue(receipt['acknowledged'])
+        self.assertEqual(self.jobs.calls, [('ack', 'image-123', body, 'ack-fixture')])
+
+    def test_image_create_uses_host_task_identity_header_without_changing_legacy_body(self):
+        path = '/v1/images/jobs'
+        request = {'model': 'codex-image', 'prompt': 'fixture'}
+        headers = {'Idempotency-Key': 'p5-image-create', 'X-BeefTV-Task-ID': 'owned-task'}
+        status, _ = self.request(path, 'POST', request, headers=headers)
+        self.assertEqual(status, 202)
+        self.assertEqual(self.jobs.calls, [('create', {**request, 'beefTaskId': 'owned-task'}, 'p5-image-create')])
+        with self.assertRaises(HTTPError) as mismatch:
+            self.request(path, 'POST', {**request, 'beefTaskId': 'different-task'}, headers=headers)
+        self.assertEqual(mismatch.exception.code, 409)
+        mismatch.exception.close()
+        self.assertEqual(len(self.jobs.calls), 1)
 
     def test_submit_poll_cancel_preserve_native_task_and_idempotency_key(self):
         body = {'model': 'codex-image', 'prompt': 'a cup', 'images': [], 'aspectRatio': '1:1'}

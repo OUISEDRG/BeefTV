@@ -14,15 +14,23 @@ def positive(value):
 
 
 def public_task(job):
-    fields=('id','kind','status','stage','pointsEstimate','autoExecuteAt','projectId','seriesId','canvasId','nodeId','taskId')
+    fields=('id','kind','status','stage','pointsEstimate','projectId','seriesId','canvasId','nodeId','taskId')
     result={key:job.get(key) for key in fields}
     result['kind']=result['kind'] or 'video'
-    result['cancelable']=job.get('status') in ('preparation_queued','preparing','prepared') and job.get('generationSubmitted') is False
+    result['cancelable']=False
     result['resultReady']=job.get('status')=='completed'
     # Upstream errors can embed signed URLs or headers. This API uses a stable
     # action-oriented message; detailed ledger remains local to the executor.
-    result['error']=('任务需要核对，请查看本地执行器记录。' if job.get('error') or job.get('autoExecuteError') else None)
+    result['error']=('任务需要核对，请查看本地执行器记录。'
+                     if job.get('error') or job.get('autoExecuteError') or job.get('executionError') else None)
+    if job.get('bindingVerificationRequired') and job.get('status') not in ('completed','failed','cancelled'):
+        result['status']='binding_verification_required'
     return result
+
+
+def needs_task_reconciliation(task):
+    return (task['status'] in ('unknown','submission_unknown','download_failed','binding_verification_required','recovery_required')
+            or task['status']=='prepared' and (task['stage']=='budget_blocked' or bool(task['error'])))
 
 
 def project_item(row):
@@ -111,7 +119,7 @@ def get_integration(server,path,query):
     if path=='/status':
         from ledger_status import inspect_ledger
         return {'schemaVersion':1,'service':'dreama-preflight','integrationVersion':'1.0',
-                'executionMode':server.execution_policy.get('mode'),'delaySeconds':5,
+                'executionMode':server.execution_policy.get('mode'),'delaySeconds':0,
                 'ledger':inspect_ledger(server.bridge.root)}
     if path=='/projects':
         return {'items':[project_item(row) for row in paged(gateway,'project','list') if row.get('promptMode')=='drama']}
@@ -123,5 +131,9 @@ def get_integration(server,path,query):
         return catalog(pid,gateway,server.bridge.root)
     if path=='/tasks':
         canvas=query.get('canvasId',[None])[0]
-        return {'items':[public_task(row) for row in server.list_jobs() if canvas is None or row.get('canvasId')==canvas]}
+        scope=query.get('scope',['all'])
+        if scope not in (['all'],['exceptions']):
+            raise BridgeError('任务查询范围无效。')
+        tasks=[public_task(row) for row in server.list_jobs() if canvas is None or row.get('canvasId')==canvas]
+        return {'items':tasks if scope==['all'] else [task for task in tasks if needs_task_reconciliation(task)]}
     raise BridgeError('集成接口不存在。')

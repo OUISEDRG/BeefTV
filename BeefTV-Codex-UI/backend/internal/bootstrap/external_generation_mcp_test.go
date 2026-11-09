@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -39,6 +40,9 @@ func TestExternalMCPGenerationApprovalAndReceipt(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	bin := filepath.Join(t.TempDir(), "beeftv")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "./cmd/beeftv")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {

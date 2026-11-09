@@ -3,7 +3,7 @@ import { App, Button, Input, Select, Tag } from "antd";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { dreamaApi, type DreamaTask } from "@/services/api/dreama-workbench";
-import { bindDreamaProject, dreamaTaskPresentation, dreamaWorkbenchChannel, withoutDreamaBinding } from "@/lib/canvas/dreama-workbench";
+import { bindDreamaProject, dreamaTaskException, dreamaWorkbenchChannel, withoutDreamaBinding } from "@/lib/canvas/dreama-workbench";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { persistCanvasDocument } from "@/services/local-workspace-repository";
 import { commitModelConfig, flushModelConfig, getModelConfigPersistenceState } from "@/services/model-config-repository";
@@ -56,8 +56,8 @@ export function DreamaWorkbench(props: Props) {
         queryFn: ({ signal }) => dreamaApi.series(channelId, projectId!, signal), retry: false,
     });
     const tasks = useQuery({
-        queryKey: ["dreama-tasks", channelId, project.id], enabled: Boolean(channelId && directory.isSuccess),
-        queryFn: ({ signal }) => dreamaApi.tasks(channelId, project.id, signal), refetchInterval: 2_000, retry: false,
+        queryKey: ["dreama-task-exceptions", channelId, project.id], enabled: Boolean(expanded && channelId && directory.isSuccess),
+        queryFn: ({ signal }) => dreamaApi.taskExceptions(channelId, project.id, signal), retry: false,
     });
     const selected = nodes.filter(node => selectedNodeIds.has(node.id));
     const selectedGroup = selected.length === 1 && isFrameNode(selected[0]) ? selected[0] : undefined;
@@ -65,7 +65,7 @@ export function DreamaWorkbench(props: Props) {
     const preview = previewNode?.metadata?.dreamaGenerationPreview;
     const groups = nodes.filter(isFrameNode);
     const seriesOptions = series.data?.items.map(item => ({ value: item.id, label: item.name })) || [];
-    const activeTasks = tasks.data?.items.filter(task => dreamaTaskPresentation(task).pending) || [];
+    const exceptions = tasks.data?.items.filter(task => dreamaTaskException(task)) || [];
 
     if (!channel && !binding) return null;
     const run = async (operation: () => Promise<unknown>) => {
@@ -117,7 +117,7 @@ export function DreamaWorkbench(props: Props) {
         await generate(previewNode.id, mode, previewNode.metadata?.composerContent ?? previewNode.metadata?.prompt ?? "", { previewOnly: true, skipDuplicateConfirmation: true });
         setExpanded(true);
     };
-    const problem = error || directory.error?.message || series.error?.message || tasks.error?.message;
+    const problem = error || directory.error?.message || series.error?.message || (expanded ? tasks.error?.message : undefined);
     return <section className="dreama-workbench text-foreground" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="剧梦工作台">
         <div className="dreama-workbench-controls flex items-center gap-2 text-xs">
             <strong>剧梦</strong>
@@ -127,8 +127,8 @@ export function DreamaWorkbench(props: Props) {
             <div className="flex items-center gap-1"><span>默认剧集</span><Select size="small" aria-label="默认剧集" placeholder="选择默认剧集" value={binding?.defaultSeriesId} disabled={readOnly || busy || !projectId || !series.isSuccess} loading={series.isLoading} style={{ width: 150 }} options={seriesOptions} onChange={value => void run(() => saveBinding(value))} /></div>
             {binding ? <span className="text-muted-foreground">{binding.aspectRatio} · 剧本模式</span> : <span className="text-muted-foreground">选择默认剧集后自动保存绑定</span>}
             {selectedGroup && binding ? <Select size="small" allowClear aria-label="选中分组剧集" placeholder="分组使用默认剧集" style={{ width: 165 }} options={seriesOptions} value={selectedGroup.metadata?.dreamaSeriesId} disabled={readOnly || busy} onChange={value => void run(() => saveGroup(selectedGroup.id, value))} /> : null}
-            <Button size="small" aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>任务与引用{activeTasks.length ? ` (${activeTasks.length})` : ""}</Button>
-            <Button size="small" disabled={busy || !channelId} onClick={() => void run(async () => { await directory.refetch({ throwOnError: true }); if (projectId) await series.refetch({ throwOnError: true }); await tasks.refetch({ throwOnError: true }); })}>刷新</Button>
+            <Button size="small" aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>预检与异常</Button>
+            <Button size="small" disabled={busy || !channelId} onClick={() => void run(async () => { await directory.refetch({ throwOnError: true }); if (projectId) await series.refetch({ throwOnError: true }); if (expanded) await tasks.refetch({ throwOnError: true }); })}>刷新</Button>
             <Button size="small" disabled={readOnly || busy || !channelId} onClick={() => void run(refreshCatalog)}>刷新模型目录</Button>
         </div>
         {problem || !channel || expanded ? <div className="dreama-workbench-panel">
@@ -151,7 +151,7 @@ export function DreamaWorkbench(props: Props) {
                 {preview ? <p className="text-muted-foreground">显示最近一次编译快照；点击生成时会按当前输入重新校验。</p> : null}
                 {previewNode?.metadata?.generationPreflightError ? <p role="alert">{previewNode.metadata.generationPreflightError}</p> : null}
             </div>
-            <div className="space-y-2"><strong>当前画布任务</strong>{!tasks.data?.items.length ? <p>暂无剧梦任务</p> : tasks.data.items.map(task => <DreamaTaskRow key={task.id} task={task} busy={busy || readOnly} onOpen={() => { focusNode(task.nodeId); openTask(task.nodeId); }} onCancel={() => void run(async () => { await dreamaApi.cancelTask(channelId, task.id); await tasks.refetch({ throwOnError: true }); })} />)}</div>
+            <div className="space-y-2"><strong>当前画布异常</strong><p className="text-muted-foreground">生成进度与结果请在任务中心查看。</p>{tasks.isLoading ? <p>正在读取异常记录…</p> : !exceptions.length ? <p>暂无需要核对的任务</p> : exceptions.map(task => <DreamaTaskRow key={task.id} task={task} onOpen={() => { focusNode(task.nodeId); openTask(task.nodeId); }} />)}</div>
         </div> : null}
         </div> : null}
     </section>;
@@ -171,16 +171,12 @@ export function DreamaSnapshotPreview({ preview, onFocus }: { preview: DreamaGen
     </div>;
 }
 
-export function DreamaTaskRow({ task, busy, onOpen, onCancel }: { task: DreamaTask; busy: boolean; onOpen: () => void; onCancel: () => void }) {
-    const presentation = dreamaTaskPresentation(task);
-    const [now, setNow] = useState(Date.now());
-    useEffect(() => { if (!task.cancelable || !task.autoExecuteAt) return; const timer = window.setInterval(() => setNow(Date.now()), 500); return () => window.clearInterval(timer); }, [task.cancelable, task.autoExecuteAt]);
-    const executeAt = typeof task.autoExecuteAt === "number" ? (task.autoExecuteAt < 1e12 ? task.autoExecuteAt * 1000 : task.autoExecuteAt) : Date.parse(task.autoExecuteAt || "");
-    const seconds = Math.max(0, Math.ceil((executeAt - now) / 1000));
+export function DreamaTaskRow({ task, onOpen }: { task: DreamaTask; onOpen: () => void }) {
+    const label = dreamaTaskException(task);
+    if (!label) return null;
     return <div className="space-y-1 rounded border border-border p-2">
-        <div className="flex items-center gap-2"><button className="min-w-0 flex-1 truncate text-left" onClick={onOpen}>{taskNames[task.kind] || task.kind} · 剧集 {task.seriesId}</button><Tag>{presentation.label}</Tag></div>
-        {presentation.detail ? <p>{presentation.detail}</p> : null}
-        <div className="flex items-center justify-between"><span>{task.pointsEstimate === undefined ? "等待报价" : `预计 ${task.pointsEstimate} 积分`}{task.cancelable && Number.isFinite(executeAt) ? ` · ${seconds} 秒后执行` : ""}</span>{task.cancelable ? <Button size="small" aria-label="取消剧梦任务" disabled={busy} onClick={onCancel}>取消</Button> : null}</div>
+        <div className="flex items-center gap-2"><button className="min-w-0 flex-1 truncate text-left" onClick={onOpen}>{taskNames[task.kind] || task.kind} · 剧集 {task.seriesId}</button><Tag>{label}</Tag></div>
+        {task.pointsEstimate != null ? <p>预计 {task.pointsEstimate} 积分</p> : null}
         {task.error ? <p role="alert" className="break-words">{task.error}</p> : null}
     </div>;
 }

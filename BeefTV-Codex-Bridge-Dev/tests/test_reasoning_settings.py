@@ -47,7 +47,8 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(self.settings.snapshot()['revision'],0)
     def test_model_and_effort_reach_rpc_and_chain_pins_effort(self):
         rpc=RecordingRPC([tool()])
-        bridge=CompletionBridge(lambda:rpc,self.catalog.model_ids,reasoning=self.settings)
+        bridge=CompletionBridge(lambda:rpc,self.catalog.model_ids,reasoning=self.settings,
+                                authorize_submission=lambda: None)
         self.addCleanup(bridge.close)
         request={'model':'gpt-6-astra','messages':[{'role':'user','content':'原文'}],'tools':TOOLS,'reasoning_effort':'medium'}
         first=bridge.complete(request)

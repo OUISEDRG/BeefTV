@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -60,6 +62,7 @@ type ManifestResponse struct {
 	Videos        any  `json:"videos,omitempty"`
 	Audios        any  `json:"audios,omitempty"`
 	Usage         any  `json:"usage,omitempty"`
+	Artifacts     any  `json:"artifacts,omitempty"`
 	// SuccessCodes 声明协议自己的业务成功码：命中的 errorPaths 值不再算失败。
 	// 只有显式声明该字段的协议生效（即梦 CV 接口用 code=10000 表示成功），
 	// 未声明的协议继续沿用共享的「零值即成功」规则。
@@ -289,15 +292,15 @@ func ValidateManifest(manifest Manifest) error {
 			return fmt.Errorf("duplicate provider contribution %q", provider.ID)
 		}
 		providerIDs[provider.ID] = struct{}{}
-		requiresV3 := len(provider.Variables) > 0 || provider.Response.Stream != nil || provider.Response.DetectImageMIME
-		for _, operation := range []*ManifestOperation{&provider.Create, provider.Poll, provider.Cancel, provider.Result, provider.Agent} {
+		requiresV3 := len(provider.Variables) > 0 || provider.Response.Stream != nil || provider.Response.DetectImageMIME || provider.Ack != nil || provider.Response.Artifacts != nil
+		for _, operation := range []*ManifestOperation{&provider.Create, provider.Poll, provider.Cancel, provider.Result, provider.Agent, provider.Ack} {
 			requiresV3 = requiresV3 || (operation != nil && operation.DefaultPathPrefix != "")
 		}
 		if strings.TrimSpace(manifest.APIVersion) != "beeftv.plugin/v3" && requiresV3 {
-			return fmt.Errorf("provider %q requires beeftv.plugin/v3 for variables, defaultPathPrefix or image response extensions", provider.ID)
+			return fmt.Errorf("provider %q requires beeftv.plugin/v3 for variables, defaultPathPrefix, image response extensions or media delivery", provider.ID)
 		}
 		var expressions []any
-		for _, operation := range []*ManifestOperation{&provider.Create, provider.Poll, provider.Cancel, provider.Result, provider.Agent} {
+		for _, operation := range []*ManifestOperation{&provider.Create, provider.Poll, provider.Cancel, provider.Result, provider.Agent, provider.Ack} {
 			if operation != nil {
 				expressions = append(expressions, operation.Body)
 			}
@@ -354,6 +357,18 @@ func ValidateManifest(manifest Manifest) error {
 				return fmt.Errorf("provider %q result operation: %w", provider.ID, err)
 			}
 		}
+		if provider.Ack != nil || provider.Response.Artifacts != nil {
+			if provider.Response.Artifacts == nil || !taskScopedOperation(provider.Ack, http.MethodPost) {
+				return fmt.Errorf("provider %q media delivery requires artifact mapping and a POST acknowledgement path scoped to the task", provider.ID)
+			}
+			if err := validateManifestOperation(*provider.Ack); err != nil {
+				return fmt.Errorf("provider %q ack operation: %w", provider.ID, err)
+			}
+			if !taskScopedOperation(provider.Poll, http.MethodGet) ||
+				(provider.Result != nil && !taskScopedOperation(provider.Result, http.MethodGet)) {
+				return fmt.Errorf("provider %q media delivery requires task-scoped GET poll and result operations", provider.ID)
+			}
+		}
 		for ruleIndex, rule := range provider.Validations {
 			if rule.Assert == nil || strings.TrimSpace(rule.Message) == "" {
 				return fmt.Errorf("provider %q validation %d requires assert and message", provider.ID, ruleIndex)
@@ -361,6 +376,20 @@ func ValidateManifest(manifest Manifest) error {
 		}
 	}
 	return nil
+}
+
+func taskScopedOperation(operation *ManifestOperation, method string) bool {
+	if operation == nil || operation.PathTemplate != nil || !strings.EqualFold(operation.Method, method) {
+		return false
+	}
+	target := strings.TrimSpace(operation.Path)
+	parsed, err := url.Parse(target)
+	if err != nil || strings.Contains(target, "#") {
+		return false
+	}
+	rawPath, _, _ := strings.Cut(target, "?")
+	decodedPath := strings.TrimSuffix(parsed.Path, "/")
+	return path.Clean(decodedPath) == decodedPath && slices.Contains(strings.Split(rawPath, "/"), "{{taskId}}")
 }
 
 func normalizeManifest(manifest *Manifest) error {
@@ -404,6 +433,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Agent = provider.Agent
 	manifest.Poll = provider.Poll
 	manifest.Cancel = provider.Cancel
+	manifest.Ack = provider.Ack
 	manifest.ResultOperation = provider.Result
 	manifest.Response = provider.Response
 	manifest.AgentResponse = provider.AgentResponse
@@ -566,7 +596,10 @@ func (a manifestAdapter) ParseCreate(_ context.Context, body []byte) (CreateResu
 	if err != nil {
 		return CreateResult{}, err
 	}
-	result := a.parse(payload, PollContext{})
+	result, err := a.parse(payload, PollContext{})
+	if err != nil {
+		return CreateResult{}, err
+	}
 	if a.manifest.Response.DetectImageMIME {
 		if err := detectInlineImageMIME(result.Result); err != nil {
 			return CreateResult{}, err
@@ -609,7 +642,10 @@ func (a manifestAdapter) ParsePoll(_ context.Context, c PollContext, body []byte
 	if err != nil {
 		return PollResult{}, err
 	}
-	result := a.parse(payload, c)
+	result, err := a.parse(payload, c)
+	if err != nil {
+		return PollResult{}, err
+	}
 	return PollResult{TaskID: result.TaskID, Status: result.Status, Result: result.Result, Message: result.Message}, nil
 }
 func (a manifestAdapter) BuildCancel(_ context.Context, c PollContext) (RequestSpec, error) {
@@ -638,12 +674,16 @@ func (a manifestAdapter) buildOperation(operation ManifestOperation, request Gen
 	return buildManifestOperation(operation, a.manifest.Auth, request, taskID, variables)
 }
 
-func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResult {
+func (a manifestAdapter) parse(payload map[string]any, c PollContext) (CreateResult, error) {
 	response := a.manifest.Response
 	env := map[string]any{"response": payload, "taskId": c.TaskID, "request": manifestRequestValues(c.Request)}
 	id := manifestResponseString(response.TaskID, env)
 	if id == "" {
 		id = firstPathValue(payload, response.TaskIDPaths...)
+	}
+	reportedID := id
+	if a.manifest.Ack != nil && c.TaskID != "" && reportedID != "" && reportedID != c.TaskID {
+		return CreateResult{}, fmt.Errorf("media delivery response changed the original provider task")
 	}
 	if id == "" {
 		id = c.TaskID
@@ -667,6 +707,14 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 		Text:      manifestResponseString(response.Text, env),
 		Reasoning: manifestResponseString(response.Reasoning, env),
 	}
+	artifacts, err := decodeMediaArtifacts(response.Artifacts, env)
+	if err != nil {
+		return CreateResult{}, err
+	}
+	if len(artifacts) > 0 && reportedID == "" {
+		return CreateResult{}, fmt.Errorf("media artifact response did not identify the original provider task")
+	}
+	result.Artifacts = artifacts
 	if result.Text == "" {
 		result.Text = firstPathValue(payload, response.TextPaths...)
 	}
@@ -714,7 +762,7 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	if result.Text == "" && result.Reasoning == "" && len(result.Images) == 0 && len(result.Videos) == 0 && len(result.Audios) == 0 {
 		result = nil
 	}
-	return CreateResult{TaskID: id, Status: status, Result: result, Message: message}
+	return CreateResult{TaskID: id, Status: status, Result: result, Message: message}, nil
 }
 
 var manifestVariableName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

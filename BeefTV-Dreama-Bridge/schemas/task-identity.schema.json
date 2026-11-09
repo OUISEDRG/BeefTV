@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "clientOperationId", "bridgeJobId", "outputIndex", "outputCount"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "clientOperationId": {"type": "string", "minLength": 1, "maxLength": 200},
+    "bridgeJobId": {"type": "string", "minLength": 1, "maxLength": 200},
+    "beefTaskId": {"type": ["string", "null"], "minLength": 1},
+    "providerRequestId": {"type": ["string", "null"], "minLength": 1},
+    "upstreamTaskId": {"type": ["string", "integer", "null"], "minLength": 1, "minimum": 1},
+    "resourceId": {"type": ["string", "null"], "minLength": 1},
+    "sourceNodeId": {"type": ["string", "null"], "minLength": 1},
+    "artifactId": {"type": ["string", "null"], "minLength": 1},
+    "outputIndex": {"type": "integer", "minimum": 0},
+    "outputCount": {"type": "integer", "minimum": 1}
+  }
+}

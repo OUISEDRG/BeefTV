@@ -41,11 +41,10 @@ description: 本地画布的剧梦项目绑定、能力参数、任务执行和�
 | POST series | 按明确项目与名称新建剧集 |
 | GET catalog | 版本化模型能力目录 |
 | POST catalog/refresh | 携带 expectedRevision，更新同一连接的已保存剧梦渠道 |
-| GET tasks?canvasId=… | 当前画布的脱敏任务状态 |
-| POST tasks/:id/cancel | 取消仍可取消的本地阶段；不伪装远端取消 |
+| GET tasks?canvasId=…&scope=exceptions | 当前画布的预检、预算、对账和结果取回异常 |
 | POST ensure | 复用服务，或使用安装器保存的运行配置隐藏启动 |
 
-生成仍进入原来的 BeefTV 任务与插件协议。`providerOptions.dreama` 保存 v1 绑定快照；Python 账本唯一负责收费提交、倒计时和远端对账。未知回执不重新提交，产物下载失败不重新生成。模型目录刷新只更新模型及 profile，不替换密钥、其他渠道或默认模型。
+生成使用 BeefTV 原生任务与插件协议，进度和结果在原生任务中心查看。`providerOptions.dreama` 保存 v1 绑定快照。Python 账本在预检和预算通过后提交，预算未配置时保留已准备的任务。未知回执只做对账，产物下载失败时继续取回原结果。Dreama 上游目前不支持取消，查询和交付继续使用原任务。模型目录刷新只更新模型及 profile。
 
 ### 从项目文件夹检查生成草稿
 
