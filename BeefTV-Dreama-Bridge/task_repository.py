@@ -8,7 +8,7 @@ import sqlite3
 import time
 import uuid
 
-from budget_policy import BudgetError, budget_window, exact_total, point_text, points, policy_hash
+from budget_policy import BudgetError, budget_window, direct_authorized, exact_total, point_text, points, policy_hash
 from task_contracts import identity_from_job, legacy_state, transition_allowed, validate_contract, ContractError
 
 class RepositoryError(ValueError):
@@ -223,18 +223,23 @@ class TaskRepository:
                 raise RepositoryError('Task cannot enter a new paid submission')
             if db.execute('SELECT 1 FROM p1_submissions WHERE job_id=?',(job['id'],)).fetchone():
                 raise RepositoryError('A durable intent already exists; reconcile only')
-            daily, limit, start, end = budget_window(policy, job.get('kind','video'), now)
+            exists = db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='jobs'").fetchone()
+            current = db.execute('SELECT result FROM jobs WHERE key=?',(job['id'],)).fetchone() if exists else None
+            if job.get('submissionHold') or (current and json.loads(current[0]).get('submissionHold')):
+                raise RepositoryError('任务已按用户要求暂停，未提交生成。')
             quoted = points(quote)
-            if quoted > limit: raise BudgetError('单次预算不足，未提交收费任务。')
-            charges = self._budget_charges(db, start, end)
-            if exact_total([*charges, quoted]) > daily: raise BudgetError('每日预算不足，未提交收费任务。')
+            start = end = None
+            if not direct_authorized(policy):
+                daily, limit, start, end = budget_window(policy, job.get('kind','video'), now)
+                if quoted > limit: raise BudgetError('单次预算不足，未提交收费任务。')
+                charges = self._budget_charges(db, start, end)
+                if exact_total([*charges, quoted]) > daily: raise BudgetError('每日预算不足，未提交收费任务。')
             self._transition(db, job['id'], 'validating', reason='budget-validation')
             intent_id = uuid.uuid4().hex
             db.execute('INSERT INTO p1_submissions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (job['id'],intent_id,job.get('kind','video'),point_text(job.get('estimatedPoints',job['pointsEstimate'])),None if billing_source=='estimated' else point_text(quoted),point_text(quoted),None,
                  billing_source,'reserved',json.dumps(policy,sort_keys=True),policy_hash(policy),start,end,now,None,None))
             self._transition(db, job['id'], 'submission_intent', reason='durable-before-upstream')
-            exists = db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='jobs'").fetchone()
             if exists:
                 current = db.execute('SELECT result FROM jobs WHERE key=?',(job['id'],)).fetchone()
                 if not current or json.loads(current[0])['status'] != 'prepared': raise RepositoryError('Provider task no longer prepared')
@@ -299,10 +304,13 @@ class TaskRepository:
             row = self._undispatched_intent(db, job)
             try:
                 policy = load_policy()
-                daily, limit, start, end = budget_window(policy, row['kind'], time.time() if now is None else now)
-                if (row['policy_hash'] != policy_hash(policy) or (row['window_start'], row['window_end']) != (start, end)
-                        or points(row['reserved_points']) > limit or exact_total(self._budget_charges(db, start, end)) > daily):
+                if row['policy_hash'] != policy_hash(policy):
                     raise BudgetError('收费前预算或日界线已变化。')
+                if not direct_authorized(policy):
+                    daily, limit, start, end = budget_window(policy, row['kind'], time.time() if now is None else now)
+                    if ((row['window_start'], row['window_end']) != (start, end) or points(row['reserved_points']) > limit
+                            or exact_total(self._budget_charges(db, start, end)) > daily):
+                        raise BudgetError('收费前预算或日界线已变化。')
             except BudgetError as error:
                 denial = str(error)
                 self._release_unsent(db, row, job, 'budget_revoked', 'budget-changed-before-dispatch', denial)
@@ -397,6 +405,8 @@ class TaskRepository:
         anomalies = ['charge_variance'] if variance else []
         try:
             policy = json.loads(row['policy_json']) if row['policy_json'] else None
+            if direct_authorized(policy):
+                return anomalies
             daily, limit, start, end = budget_window(policy, row['kind'], row['intent_at'])
             if (start, end) != (row['window_start'], row['window_end']):
                 raise BudgetError('Original budget window unavailable')

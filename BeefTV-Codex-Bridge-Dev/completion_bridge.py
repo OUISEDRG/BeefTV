@@ -18,10 +18,10 @@ class BridgeError(Exception):
         self.status, self.code = status, code
 
 
-def require_submission_budget(authorize_submission):
-    if authorize_submission is None:
-        raise BridgeError('本机 Codex 预算未配置，无法提交新任务。', 409, 'budget_not_configured')
-    authorize_submission()
+def authorize_new_submission(authorize_submission):
+    """Authenticated local requests use native Codex limits unless a hook is supplied."""
+    if authorize_submission is not None:
+        authorize_submission()
 
 
 def canonical(value):
@@ -275,7 +275,7 @@ class CompletionBridge:
             actual_model=model
         if sum(not c.closed for c in self.chains) >= self.max_sessions:
             raise BridgeError('本机 Codex 正在处理较多任务，请稍后再试。',429,'busy')
-        require_submission_budget(self.authorize_submission)
+        authorize_new_submission(self.authorize_submission)
         rpc = self.factory()
         chain = Chain(rpc, model, tools, copy.deepcopy([m for m in messages if m['role'] in {'system','developer','user'}]),effort=effort)
         self.chains.append(chain)

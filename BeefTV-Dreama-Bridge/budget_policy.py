@@ -68,6 +68,13 @@ def policy_hash(value):
     except (TypeError, ValueError):
         return 'invalid-policy'
 
+def direct_authorized(policy):
+    try:
+        validate_contract('budget', policy)
+    except ContractError:
+        return False
+    return policy.get('mode') == 'direct-authorized' and policy['enabled'] is True
+
 def budget_window(policy, kind, now):
     try:
         validate_contract('budget', policy)

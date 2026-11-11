@@ -1,11 +1,13 @@
 import io
 import json
+import os
 from pathlib import Path
 import queue
 import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from codex_rpc import RpcSession, RpcError, isolated_catalog, normalize_tools, clean_environment
@@ -118,6 +120,45 @@ class RpcTests(unittest.TestCase):
     def test_environment_strips_current_chat_extensions(self):
         result = clean_environment({"PATH": "p", "CODEX_HOME": "h", "CODEX_APP_TOOLS_PIPE_PATH": "secret-pipe", "CODEX_THREAD_ID": "current"})
         self.assertEqual(result, {"PATH": "p", "CODEX_HOME": "h"})
+    def test_new_image_sessions_read_current_native_account_storage(self):
+        homes = [Path(self.temp.name) / name for name in ('first-home', 'second-home')]
+        for home in homes:
+            home.mkdir()
+        processes = []
+        environments = []
+        class AccountProcess(FakeProcess):
+            def receive(self, message):
+                if message.get('method') == 'account/read':
+                    self.messages.append(message)
+                    self.emit({'id': message['id'], 'result': {
+                        'account': {'type': 'chatgpt', 'planType': self.plan},
+                        'requiresOpenaiAuth': True}})
+                else:
+                    super().receive(message)
+        def launch(*args, **kwargs):
+            environments.append(dict(kwargs['env']))
+            process = AccountProcess()
+            process.plan = 'pro' if kwargs['env']['CODEX_HOME'] == str(homes[0]) else 'plus'
+            processes.append(process)
+            return process
+        with (patch('codex_rpc.prepare_catalog', return_value='fixture-catalog'),
+              patch('codex_rpc.subprocess.Popen', side_effect=launch)):
+            plans = []
+            for home in homes:
+                with patch.dict(os.environ, {'CODEX_HOME': str(home), 'CODEX_THREAD_ID': 'not-inherited'}):
+                    session = RpcSession('fake-codex', self.temp.name, image_generation=True)
+                    try:
+                        plans.append(session.probe()['account']['planType'])
+                    finally:
+                        session.close()
+        self.assertEqual(plans, ['pro', 'plus'])
+        self.assertEqual([environment['CODEX_HOME'] for environment in environments], [str(home) for home in homes])
+        self.assertTrue(all('CODEX_THREAD_ID' not in environment for environment in environments))
+        self.assertEqual(len(processes), 2)
+        self.assertTrue(all([message.get('method') for message in process.messages].count('account/read') == 1
+                            for process in processes))
+        self.assertTrue(all('turn/start' not in [message.get('method') for message in process.messages]
+                            for process in processes))
     def test_catalog_keeps_model_identity_and_disables_native_tools(self):
         original = {"models": [{"slug": "m", "instructions": "keep", "tool_mode": "code_mode_only", "shell_type": "unified_exec", "apply_patch_tool_type": "freeform", "experimental_supported_tools": ["clock"], "multi_agent_version": "v2"}]}
         result = isolated_catalog(original)

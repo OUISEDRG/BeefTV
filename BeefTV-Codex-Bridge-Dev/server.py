@@ -150,6 +150,11 @@ def create_server(bridge, token, port=18766, status=None, settings=None, image_j
                                       'models':bridge.models,'activeSessions':sum(not c.closed for c in bridge.chains)+(image_jobs.active_count if image_jobs else 0),
                                       'activeImageJobs':image_jobs.active_count if image_jobs else 0,
                                       'imageGeneration':image_jobs is not None,
+                                      'submissionAuthorization':{
+                                          'text':'custom-authorization' if bridge.authorize_submission is not None else 'authenticated-local',
+                                          'image':('disabled' if image_jobs is None else
+                                                   'custom-authorization' if getattr(image_jobs,'authorize_submission',None) is not None else
+                                                   'authenticated-local')},
                                       'settingsUrl':'http://127.0.0.1:'+str(self.server.server_port)+'/settings',
                                       'nativeReasoningSettings':settings is not None,
                                       'automaticTestGeneration':False,**(status or {})})

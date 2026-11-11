@@ -51,7 +51,7 @@ Before 1.2.1, the tail hid each trailing tool result from continuation detection
 
 `tests/test_studio_continuation.py` covers twelve sequential calls, changing plans, restored skills, tool images, distinct concurrent conversations, strict user/system binding, stale IDs, cached retries, conflicting results, capacity and admission. These tests use fake native transport and do not prove live model completion or media generation quality.
 
-New text turns and image jobs require budget authorization before starting native work. The runtime leaves authorization unset. Native token usage describes consumption and has no verified conversion into the points policy. Existing tool replies and cached requests stay bound to their original turn. Image lookup, cancellation and delivery ACK remain available for existing jobs.
+Authenticated local text turns and image jobs use native Codex account limits directly. The optional `authorize_submission` callback can enforce an embedding application's additional authorization; an unset callback does not block new work. Native usage has no conversion into Dreama points. Each new image request starts a fresh native process using the configured Codex account storage, so subsequent requests follow sign-in changes in that storage. Existing tool replies and cached requests stay bound to their original turn. Image lookup, cancellation and delivery ACK remain available for existing jobs.
 
 ## Tool isolation
 

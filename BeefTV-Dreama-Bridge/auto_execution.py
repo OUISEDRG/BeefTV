@@ -14,6 +14,7 @@ class AutoExecution:
         record=self.bridge.tasks.get(job['id'])
         return (self.policy.get('mode')=='automatic' and record and not record['historical']
                 and not record['billing'] and job.get('status')=='prepared'
+                and not job.get('submissionHold')
                 and job.get('generationSubmitted') is False and not job.get('bindingVerificationRequired')
                 and bool(job.get('quoteId')) and bool(job.get('model')))
 

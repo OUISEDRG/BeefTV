@@ -396,6 +396,19 @@ class ModalitiesHTTPTests(unittest.TestCase):
             self.server.auto_execution.step()
             self.assertEqual(self.paid_count(kind), 0)
 
+    def test_persisted_submission_hold_is_terminal_for_polling_without_submission(self):
+        for kind in ('image', 'audio'):
+            path, data, job = self.create(kind, 'held-' + kind)
+            job['submissionHold'] = 'user_requested'
+            self.bridge.update(job['id'], job)
+            self.server.auto_execution.step()
+            result = requests.get(self.url + path + '/' + job['id'], headers=self.headers, timeout=5).json()
+            self.assertEqual(result['status'], 'failed', result)
+            self.assertEqual(result['error']['code'], 'submission_held')
+            self.assertIs(result['generationSubmitted'], False)
+            self.assertIn('暂停', result['message'])
+            self.assertEqual(self.paid_count(kind), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

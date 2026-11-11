@@ -48,8 +48,22 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(requests.get(self.url+'/v1/execution-policy').status_code,401)
         result=requests.get(self.url+'/v1/execution-policy',headers=self.headers)
         self.assertEqual(result.status_code,200,result.text)
-        self.assertEqual(result.json(),{'mode':'background-countdown','delaySeconds':5,'effectiveAt':100})
+        self.assertEqual(result.json(),{'mode':'background-countdown','delaySeconds':5,'effectiveAt':100,'budgetRequired':True})
         self.assertEqual(self.gateway.calls,[])
+    def test_execution_policy_reports_current_direct_authorization_without_submitting(self):
+        from budget_policy import unset_policy
+        url = self.url + '/v1/execution-policy'
+        original = dict(self.server.execution_policy)
+        self.assertIs(requests.get(url,headers=self.headers).json()['budgetRequired'], True)
+        self.server.bridge._budget_policy = {**unset_policy(), 'mode':'direct-authorized'}
+        current = requests.get(url,headers=self.headers).json()
+        self.assertIs(current['budgetRequired'], False)
+        self.assertEqual(current['mode'], original['mode'])
+        self.assertTrue(requests.get(self.url+'/health').json()['generationEnabled'])
+        self.server.bridge._budget_policy = unset_policy()
+        self.assertIs(requests.get(url,headers=self.headers).json()['budgetRequired'], True)
+        self.assertEqual(self.server.execution_policy, original)
+        self.assertEqual(self.gateway.calls, [])
     def test_background_worker_submits_after_budget_without_any_console_request(self):
         import time
         from generation import Generation

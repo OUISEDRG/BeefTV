@@ -82,8 +82,9 @@ class Bridge:
         return copy.deepcopy(self._budget_policy) if self._budget_policy is not None else read_policy(self.root/'budget-policy.json')
 
     def budget_is_configured(self):
-        from budget_policy import budget_window,BudgetError,KINDS
+        from budget_policy import budget_window,direct_authorized,BudgetError,KINDS
         config=self.budget_config()
+        if direct_authorized(config): return True
         for kind in KINDS:
             try: budget_window(config,kind,time.time())
             except BudgetError: continue
@@ -114,6 +115,9 @@ class Bridge:
             db.execute('BEGIN IMMEDIATE')
             row=db.execute('SELECT result FROM jobs WHERE key=?',(key,)).fetchone()
             previous=json.loads(row[0]) if row else {}
+            # Ordinary worker projections cannot release an operator's persisted hold.
+            if previous.get('submissionHold'):
+                result['submissionHold'] = previous['submissionHold']
             if previous.get('status') == 'failed' and previous.get('generationSubmitted') is False:
                 released = db.execute("SELECT 1 FROM p1_submissions WHERE job_id=? AND settlement_status='released'",
                                       (key,)).fetchone()

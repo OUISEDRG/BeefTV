@@ -21,7 +21,7 @@ import uuid
 import warnings
 
 from PIL import Image
-from completion_bridge import BridgeError, require_submission_budget
+from completion_bridge import BridgeError, authorize_new_submission
 from image_ledger import OUTPUT_NAMES, migrate, record_artifact, record_native_receipt, valid_identifier, validate_ack
 from media_cleanup import HISTORY_ONLY, MAY_HAVE_REMOVED, MediaCleanup, UnsafeMedia, receipts
 
@@ -317,7 +317,7 @@ class ImageJobs:
                     self._bind_task(old["id"], beef_task_id)
                     self.db.execute("COMMIT")
                     return self._snapshot(old)
-                require_submission_budget(self.authorize_submission)
+                authorize_new_submission(self.authorize_submission)
                 if self.active_count >= self.max_pending:
                     raise BridgeError("本机生图队列已满，请稍后再试。", 429, "image_queue_full")
                 job_id = uuid.uuid4().hex

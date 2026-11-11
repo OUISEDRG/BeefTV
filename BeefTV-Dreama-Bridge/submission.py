@@ -61,6 +61,7 @@ class SubmissionService:
         with bridge.task_lock(key):
             job = bridge.get(key)
             if not job or job.get('status') != 'prepared': raise BridgeError('任务不可新提交；已有意图只能查询或对账。')
+            if job.get('submissionHold'): raise BridgeError('任务已按用户要求暂停，未提交生成。')
             record = bridge.tasks.get(key)
             if not record or record['historical'] or record['billing']:
                 raise BridgeError('历史任务或已有收费意图，不能重新提交。')

@@ -212,6 +212,14 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError): pass
     def error(self, status, message, code='preflight_error'):
         self.send_json(status,{'error':{'code':code,'message':message}})
+
+    def send_submission_hold(self, job):
+        if not job.get('submissionHold') or job.get('generationSubmitted') is not False:
+            return False
+        message = '任务已按用户要求暂停，未提交生成。'
+        self.send_json(200, {'id':job['id'], 'status':'failed', 'held':True, 'generationSubmitted':False,
+                             'message':message, 'error':{'code':'submission_held', 'message':message}})
+        return True
     def authorized(self):
         origin=self.headers.get('Origin')
         if (origin and origin!=f'http://127.0.0.1:{self.server.server_port}') or self.headers.get('Sec-Fetch-Site')=='cross-site':
@@ -281,7 +289,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.error(503,str(error) if isinstance(error,BridgeError) else '剧梦音色目录暂不可用，请稍后刷新。','voice_catalog_unavailable')
             return
         if path=='/v1/execution-policy':
-            self.send_json(200,self.server.execution_policy); return
+            from budget_policy import direct_authorized
+            self.send_json(200,{**self.server.execution_policy,
+                'budgetRequired':not direct_authorized(self.server.bridge.budget_config())}); return
         if path=='/v1/jobs':
             self.send_json(200,{'data':self.server.list_jobs()[:100],'serverTime':time.time()}); return
         if path.startswith('/v1/jobs/') and path.endswith('/ack'):
@@ -307,10 +317,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200,{'id':key,'status':'processing'}); return
             kind='image' if image_path else 'audio'
             if not result or result.get('kind')!=kind: self.error(404,'未找到对应任务。'); return
-            out={'id':key,'status':'pending','message':result.get('error','预检与预算通过后自动执行，完成后自动回传。')}
+            if self.send_submission_hold(result): return
+            out={'id':key,'status':'pending','message':result.get('error','准备完成后自动执行，完成后自动回传。')}
             if result['status']=='prepared':
                 paused=result.get('executionError') or (result.get('autoExecuteError') if result.get('autoAttemptedQuoteId')==result.get('quoteId') else None)
-                out.update(requires_confirmation=False,message=('自动执行已暂停：'+paused) if paused else f"预计{result['pointsEstimate']}积分，预算通过后自动执行。")
+                out.update(requires_confirmation=False,message=('自动执行已暂停：'+paused) if paused else f"预计{result['pointsEstimate']}积分，准备完成后自动执行。")
             if result['status']=='completed':
                 if kind=='image':
                     items=result.get('images',[])
@@ -343,6 +354,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200,{'id':key,'status':'processing','message':'正在准备输入素材与费用预估；尚未提交扣费任务。'}); return
             if not result: self.error(404,'未找到预检记录。'); return
             if result.get('kind') in ('image','audio','text'):self.error(404,'此任务不是视频任务。');return
+            if self.send_submission_hold(result): return
             if result['status']=='completed':
                 cached=self.server.flow.videos/result['mediaKey']
                 if not cached_size(cached, result.get('video',{}).get('bytes')):
@@ -355,7 +367,7 @@ class Handler(BaseHTTPRequestHandler):
             out={'id':key,'status':'pending','generationSubmitted':result.get('generationSubmitted')}
             if status=='prepared':
                 paused=result.get('executionError') or (result.get('autoExecuteError') if result.get('autoAttemptedQuoteId')==result.get('quoteId') else None)
-                message=('自动执行已暂停：'+paused) if paused else f"预计{result['pointsEstimate']}积分，预算通过后自动执行。"
+                message=('自动执行已暂停：'+paused) if paused else f"预计{result['pointsEstimate']}积分，准备完成后自动执行。"
                 out.update(requires_confirmation=False,message=message)
             elif status=='completed':
                 out.update(status='completed',video_url=f'http://127.0.0.1:{self.server.server_port}/media/'+result['mediaKey'])
@@ -452,7 +464,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.resume(data.get('request'),key)
                 self.send_json(202,{'id':key,'status':'pending'}); return
             key=self.server.submit(data,self.headers.get('Idempotency-Key'),kind=kind,beef_task_id=self.headers.get('X-BeefTV-Task-ID'))
-            self.send_json(202,{'id':key,'status':'pending','message':'准备输入素材与费用预估；预算通过后自动执行。'})
+            self.send_json(202,{'id':key,'status':'pending','message':'准备输入素材与费用预估；准备完成后自动执行。'})
         except Conflict as error: self.error(409,str(error),'ambiguous_repeat')
         except DeliveryError as error: self.error(error.status,str(error),error.code)
         except BridgeError as error:

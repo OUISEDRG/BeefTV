@@ -46,6 +46,101 @@ class SubmissionTests(unittest.TestCase):
             self.assertEqual(gateway.calls,[])
             self.assertIsNone(bridge.tasks.get(job['id'])['billing'])
 
+    def test_direct_authorized_mode_records_real_quotes_without_local_limits(self):
+        from budget_policy import unset_policy
+        from submission import require_paid_intent
+        from image_flow import ImageFlow
+        from extension import ExtensionFlow
+        from enhancement import EnhancementFlow
+        from audio_flow import AudioFlow
+        for kind, cls in zip(('video','image','extension','enhancement','audio'),
+                             (Generation,ImageFlow,ExtensionFlow,EnhancementFlow,AudioFlow)):
+            with self.subTest(kind=kind):
+                bridge, job = self.prepared(kind=kind, key='direct-' + kind)
+                bridge._budget_policy = {**unset_policy(), 'mode':'direct-authorized'}
+                gateway = FakePaidGateway('9cb33bbf-a335-498f-b0b2-409e1e70b28b' if kind in ('audio','enhancement') else 700)
+                original = gateway.submit_video
+                def submit(saved):
+                    require_paid_intent(kind, saved, consume=True)
+                    return original(saved)
+                gateway.submit_video = submit
+                flow = cls(bridge, gateway=gateway)
+                with patch.object(flow,'check_ready'), patch.object(flow,'estimate_job',return_value=1.25):
+                    self.assertEqual(flow.submit(job['id'])['status'], 'queued')
+                billing = bridge.tasks.get(job['id'])['billing']
+                self.assertEqual(billing['reservedPoints'], '1.25')
+                self.assertIsNone(billing['actualPoints'])
+                self.assertEqual(gateway.calls, ['paid'])
+                with self.assertRaises(BridgeError): flow.submit(job['id'])
+
+    def test_submission_hold_survives_stale_update_restart_and_policy_changes(self):
+        from auto_execution import AutoExecution
+        from budget_policy import unset_policy
+        bridge, job = self.prepared(configured=True, kind='image')
+        stale = dict(job)
+        job['submissionHold'] = 'user_requested'
+        bridge.update(job['id'], job)
+        bridge.update(job['id'], stale)
+        direct = {**unset_policy(), 'mode':'direct-authorized'}
+        reopened = Bridge(self.root, budget_policy=direct)
+        gateway = FakePaidGateway()
+        flow = Generation(reopened, gateway=gateway)
+        for execution in ({'mode':'manual'}, {'mode':'automatic'}):
+            engine = AutoExecution(reopened, lambda _:flow, execution)
+            engine.recover_interrupted()
+            engine.step()
+        self.assertEqual(reopened.get(job['id']).get('submissionHold'), 'user_requested')
+        with self.assertRaisesRegex(BridgeError, '暂停'):
+            flow.submit(job['id'])
+        self.assertEqual(gateway.calls, [])
+        self.assertIsNone(reopened.tasks.get(job['id'])['billing'])
+
+    def test_repository_rejects_held_job_even_with_a_stale_submitter(self):
+        from task_repository import RepositoryError
+        bridge, job = self.prepared(configured=True)
+        stale = dict(job)
+        job['submissionHold'] = True
+        bridge.update(job['id'], job)
+        with self.assertRaises(RepositoryError):
+            bridge.tasks.reserve_intent(stale, 1.25, bridge.budget_config())
+        self.assertIsNone(bridge.tasks.get(job['id'])['billing'])
+
+    def test_direct_authorization_leaves_existing_unknown_billing_unchanged(self):
+        from budget_policy import unset_policy
+        bridge, old = self.prepared(configured=True)
+        gateway = FakePaidGateway()
+        def lost(saved):
+            gateway.calls.append('paid')
+            raise TimeoutError()
+        gateway.submit_video = lost
+        with self.assertRaises(BridgeError): Generation(bridge, gateway=gateway).submit(old['id'])
+        original = bridge.tasks.get(old['id'])['billing']
+        bridge._budget_policy = {**unset_policy(), 'mode':'direct-authorized'}
+        fresh = {**old, 'id':'new-authorized', 'requestDigest':'digest-new-authorized'}
+        with bridge.db() as db:
+            db.execute('INSERT INTO jobs VALUES (?,?,?)', (fresh['id'],fresh['requestDigest'],json.dumps(fresh)))
+        bridge.update(fresh['id'],fresh)
+        Generation(bridge, gateway=FakePaidGateway()).submit(fresh['id'])
+        self.assertEqual(bridge.tasks.get(old['id'])['billing'], original)
+        self.assertEqual(original['settlementStatus'], 'unknown')
+        with self.assertRaises(BridgeError): Generation(bridge, gateway=gateway).submit(old['id'])
+        self.assertEqual(gateway.calls, ['paid'])
+
+    def test_withdrawn_direct_authorization_never_reaches_paid_transport(self):
+        from budget_policy import unset_policy
+        from submission import require_paid_intent
+        bridge, job = self.prepared()
+        bridge._budget_policy = {**unset_policy(), 'mode':'direct-authorized'}
+        gateway = FakePaidGateway()
+        def submit(saved):
+            bridge._budget_policy = unset_policy()
+            require_paid_intent('video', saved, consume=True)
+            gateway.calls.append('paid')
+        gateway.submit_video = submit
+        with self.assertRaises(BridgeError): Generation(bridge, gateway=gateway).submit(job['id'])
+        self.assertEqual(gateway.calls, [])
+        self.assertEqual(bridge.tasks.get(job['id'])['billing']['settlementStatus'], 'released')
+
     def test_intent_is_durable_and_network_does_not_hold_sqlite_writer(self):
         bridge,job=self.prepared(configured=True); gateway=FakePaidGateway()
         original=gateway.submit_video

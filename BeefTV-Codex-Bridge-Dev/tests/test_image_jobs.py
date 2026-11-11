@@ -314,20 +314,35 @@ os._exit(0)
             jobs.close()
         self.assertEqual(calls, [])
 
-    def test_null_budget_blocks_new_admission_but_allows_original_key_and_media(self):
+    def test_default_admission_generates_once_and_preserves_original_key_and_media(self):
         old = self.jobs()
         created = old.create(payload(), "old-key")
         self.finished(old, created["id"])
         old.close()
         calls = []
-        jobs = ImageJobs(self.root, lambda **kwargs: calls.append(kwargs))
+        def generate(**kwargs):
+            calls.append(kwargs)
+            return output()
+        jobs = ImageJobs(self.root, generate)
         self.addCleanup(jobs.close)
-        with self.assertRaises(BridgeError) as caught:
-            jobs.create(payload(), "new-key")
-        self.assertEqual(caught.exception.code, "budget_not_configured")
+        fresh = jobs.create(payload(), "new-key")
+        self.assertEqual(self.finished(jobs, fresh["id"])["status"], "succeeded")
+        self.assertEqual(jobs.create(payload(), "new-key")["id"], fresh["id"])
         self.assertEqual(jobs.get(created["id"])["images"][0]["dataUrl"], DATA_URL)
         self.assertEqual(jobs.create(payload(), "old-key")["id"], created["id"])
-        self.assertEqual(jobs.db.execute("SELECT count(*) FROM jobs").fetchone()[0], 1)
+        self.assertEqual(jobs.db.execute("SELECT count(*) FROM jobs").fetchone()[0], 2)
+        self.assertEqual(len(calls), 1)
+
+    def test_explicit_authorization_hook_can_reject_before_admission(self):
+        calls = []
+        def deny():
+            raise BridgeError("Fixture authorization denied", 409, "submission_denied")
+        jobs = ImageJobs(self.root, lambda **kwargs: calls.append(kwargs), authorize_submission=deny)
+        self.addCleanup(jobs.close)
+        with self.assertRaises(BridgeError) as caught:
+            jobs.create(payload(), "denied-key")
+        self.assertEqual(caught.exception.code, "submission_denied")
+        self.assertEqual(jobs.db.execute("SELECT count(*) FROM jobs").fetchone()[0], 0)
         self.assertEqual(calls, [])
 
     def test_delivery_ack_requires_original_task_artifact_and_unchanged_bytes(self):

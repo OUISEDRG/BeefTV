@@ -85,7 +85,11 @@ v1.3 的自动化验证覆盖图片请求校验、异步任务状态、持久幂
 
 `runtime-config.json` 可以用绝对路径 `codexExecutable` 固定版本，或用绝对路径 `codexInstallRoot` 指向受信任的 Codex 安装目录。未固定版本或固定文件已不存在时，启动器在安装目录及其下一层查找 Codex，按文件修改时间从新到旧验证 `--version`。启动时确定一个 EXE，供账号、模型目录、文本和图片 RPC 共用。配置 `codexHome` 时，RPC 使用该目录和其中的 `.tmp`。修改现有运行配置前先备份并核对原文件摘要。
 
-图片预算未配置时，新图片任务返回 `budget_not_configured`。已创建任务的原幂等键、查询、取消和媒体读取可继续使用。可能已开始的原生请求在失去回执时保留 `submission_unknown`，现有 Provider 的 `status` 仍返回兼容的终止值 `failed`。已获知的原生 thread 和 turn 保存在 `nativeReceipt`，供原任务对账。SQLite 迁移保留历史记录，索引输出的 SHA256 和大小。读取结果时复核文件和记录。
+通过本机 Bearer 认证的文字与图片请求直接使用当前 Codex 登录账号的原生额度，无须配置本地积分预算。程序化接入仍可提供 `authorize_submission` 回调，在新任务创建前执行自定义授权；不提供回调时直接继续。健康接口的 `submissionAuthorization` 分别报告文字与图片使用本机认证、自定义授权或未启用。账号权限和额度错误仍由原生 Codex 返回。
+
+账号由原生 Codex 管理，每个新图片任务启动新的 App Server 进程并读取配置的 `CODEX_HOME` 登录存储。将 `runtime-config.json` 的 `codexHome` 指向日常 Codex 使用的同一目录后，换号会作用于后续新任务，无须复制凭据或重新安装。正在运行的任务和原幂等键继续属于原请求，不因换号重新生成。
+
+已创建任务的原幂等键、查询、取消和媒体读取可继续使用。可能已开始的原生请求在失去回执时保留 `submission_unknown`，现有 Provider 的 `status` 仍返回兼容的终止值 `failed`。已获知的原生 thread 和 turn 保存在 `nativeReceipt`，供原任务对账。SQLite 迁移保留历史记录，索引输出的 SHA256 和大小。读取结果时复核文件和记录。
 
 已开始的图片任务在收到取消请求后保留为运行中，直到原生事件确认原 turn 已中断。中断未确认时保留提交不明。图片在取消确认前完成时仍可取回。
 
